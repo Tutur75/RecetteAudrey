@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Marmite">
+  <rect width="64" height="64" rx="14" fill="#f7efe2" />
+  <g fill="none" stroke="#68452f" stroke-linecap="round" stroke-linejoin="round" stroke-width="4">
+    <path d="M22 18h20M27 13h10" />
+    <path d="M17 25h30l-3 23a5 5 0 0 1-5 4H25a5 5 0 0 1-5-4z" fill="#d98c45" />
+    <path d="M17 31h-5v11h7M47 31h5v11h-7" />
+    <path d="M27 57h10" />
+  </g>
+  <path d="M26 37c2-3 4 3 6 0s4 3 6 0" fill="none" stroke="#fff4df" stroke-linecap="round" stroke-width="3" />
+</svg>
