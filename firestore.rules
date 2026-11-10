@@ -1,0 +1,45 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Default-Deny Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidRecipe(data) {
+      return data.title is string && data.title.size() > 0 && data.title.size() <= 150
+        && data.season in ['spring', 'summer', 'autumn', 'winter']
+        && (!('seasons' in data) || (data.seasons is list && data.seasons.size() <= 4))
+        && data.prepTime is number && data.prepTime >= 0 && data.prepTime <= 1440
+        && (!('cookTime' in data) || (data.cookTime is number && data.cookTime >= 0 && data.cookTime <= 1440))
+        && (!('servings' in data) || (data.servings is number && data.servings >= 1 && data.servings <= 100) || (data.servings is string && data.servings.size() <= 100))
+        && (!('notes' in data) || (data.notes is string && data.notes.size() <= 2000))
+        && (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 300000))
+        && data.ingredients is list && data.ingredients.size() <= 50
+        && data.instructions is list && data.instructions.size() <= 50
+        && (!('tags' in data) || (data.tags is list && data.tags.size() <= 20));
+    }
+
+    function isValidMealPlan(data) {
+      return data.weekIndex is number && (data.weekIndex == 1 || data.weekIndex == 2)
+        && data.days is map
+        && (!('notes' in data) || (data.notes is string && data.notes.size() <= 1000));
+    }
+
+    match /recipes/{recipeId} {
+      allow read: if true;
+      allow create, update: if isValidId(recipeId) && isValidRecipe(request.resource.data);
+      allow delete: if isValidId(recipeId);
+    }
+
+    match /mealPlans/{planId} {
+      allow read: if true;
+      allow create, update: if isValidId(planId) && isValidMealPlan(request.resource.data);
+      allow delete: if isValidId(planId);
+    }
+  }
+}

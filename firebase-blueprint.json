@@ -1,0 +1,108 @@
+{
+  "entities": {
+    "recipes": {
+      "title": "Recipe",
+      "description": "Seasonal recipe with ingredients, instructions, notes, tags, and photo",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "maxLength": 150,
+          "description": "Recipe title"
+        },
+        "season": {
+          "type": "string",
+          "enum": ["spring", "summer", "autumn", "winter"],
+          "description": "Season of the recipe"
+        },
+        "prepTime": {
+          "type": "number",
+          "description": "Preparation time in minutes"
+        },
+        "cookTime": {
+          "type": "number",
+          "description": "Cooking time in minutes"
+        },
+        "servings": {
+          "type": "number",
+          "description": "Number of servings"
+        },
+        "difficulty": {
+          "type": "string",
+          "enum": ["Facile", "Moyen", "Difficile"],
+          "description": "Difficulty level"
+        },
+        "tags": {
+          "type": "array",
+          "description": "Searchable tags"
+        },
+        "ingredients": {
+          "type": "array",
+          "description": "List of recipe ingredients"
+        },
+        "instructions": {
+          "type": "array",
+          "description": "Step by step cooking instructions"
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 2000,
+          "description": "Personal culinary notes and tips"
+        },
+        "imageUrl": {
+          "type": "string",
+          "maxLength": 300000,
+          "description": "High definition recipe photo URL or data URI"
+        },
+        "rating": {
+          "type": "number",
+          "description": "Recipe rating from 1 to 5"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Last update timestamp"
+        }
+      },
+      "required": ["title", "season", "prepTime", "ingredients", "instructions"]
+    },
+    "mealPlans": {
+      "title": "MealPlan",
+      "description": "Bi-weekly meal planner schedules for week 1 and week 2",
+      "type": "object",
+      "properties": {
+        "weekIndex": {
+          "type": "number",
+          "description": "Index of the week (1 or 2)"
+        },
+        "days": {
+          "type": "object",
+          "description": "Day-by-day lunch and dinner recipe assignments"
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 1000,
+          "description": "Weekly grocery or menu notes"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Last update timestamp"
+        }
+      },
+      "required": ["weekIndex", "days"]
+    }
+  },
+  "firestore": {
+    "/recipes/{recipeId}": {
+      "schema": "recipes",
+      "description": "Collection of seasonal recipes"
+    },
+    "/mealPlans/{planId}": {
+      "schema": "mealPlans",
+      "description": "Collection of 2-week meal plans"
+    }
+  }
+}
