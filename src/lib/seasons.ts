@@ -3,6 +3,7 @@ import { Season } from '../types/recipe';
 export interface SeasonalProduct {
   name: string;
   emoji: string;
+  illustration?: 'carrot' | 'turnip' | 'parsnip' | 'broccoli';
 }
 
 export interface SeasonInfo {
@@ -89,7 +90,11 @@ export const SEASONS: Record<Season, SeasonInfo> = {
       { name: 'Raisin frais', emoji: '🍇' },
       { name: 'Figues violettes', emoji: '🫐' },
       { name: 'Betteraves rôties', emoji: '🍠' },
-      { name: 'Chou vert frisé', emoji: '🥬' }
+      { name: 'Chou vert frisé', emoji: '🥬' },
+      { name: 'Carotte', emoji: '🥕', illustration: 'carrot' },
+      { name: 'Navet', emoji: '🌱', illustration: 'turnip' },
+      { name: 'Panais', emoji: '🥕', illustration: 'parsnip' },
+      { name: 'Brocoli', emoji: '🥦', illustration: 'broccoli' }
     ]
   },
   winter: {

@@ -1,7 +1,48 @@
 import { Calendar, ChevronRight, Sparkles, UtensilsCrossed } from 'lucide-react';
 import React from 'react';
-import { getCurrentSeason, SEASONS } from '../lib/seasons';
+import { getCurrentSeason, SeasonalProduct, SEASONS } from '../lib/seasons';
 import { Recipe, recipeMatchesSeason, Season } from '../types/recipe';
+
+const ProduceIllustration: React.FC<{ item: SeasonalProduct }> = ({ item }) => {
+  switch (item.illustration) {
+    case 'carrot':
+      return (
+        <svg viewBox="0 0 24 24" className="w-4 h-4 shrink-0" aria-hidden="true">
+          <path d="M15 4c1-1.5 2.8-2 4-1.5-.2 1.3-1 2.7-2.4 3.4M14 5.5c-.5-1.8.2-3.4 1.3-4.2.7 1.2.6 2.8-.2 4.1M16.5 6.5c1.5-.6 3.2-.2 4 .8-1.2.8-2.8.9-4.2.3" fill="none" stroke="#15803d" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M14.5 6.5c2 2 2 5-.5 7.5l-7.5 6.8c-.9.8-2.2-.5-1.4-1.4L11.8 12c2.5-2.5 1.2-4 2.7-5.5Z" fill="#f97316" stroke="#c2410c" strokeWidth="1.3" strokeLinejoin="round" />
+          <path d="M11 12.5l1.8 1.8M8.8 15l1.4 1.4" stroke="#fed7aa" strokeWidth="1.3" strokeLinecap="round" />
+        </svg>
+      );
+    case 'turnip':
+      return (
+        <svg viewBox="0 0 24 24" className="w-4 h-4 shrink-0" aria-hidden="true">
+          <path d="M12 6c-1.5-2-3.5-3-5-2.5.4 1.5 1.8 2.6 3.5 3M12 6c0-2.2 1.2-3.8 2.6-4.3.7 1.4.2 3.1-1.1 4.3M12 6c1.8-1.5 3.8-1.8 5-1-.6 1.3-2.2 2-3.8 1.8" fill="none" stroke="#16a34a" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M12 7c3.8 0 6.5 2.5 6.5 5.8 0 3.7-3.4 6.2-6.5 8.5-3.1-2.3-6.5-4.8-6.5-8.5C5.5 9.5 8.2 7 12 7Z" fill="#fafaf9" stroke="#a8a29e" strokeWidth="1.3" strokeLinejoin="round" />
+          <path d="M6.2 11.4C6.8 8.7 9.1 7 12 7s5.2 1.7 5.8 4.4c-1.8.9-3.8 1.2-5.8 1.2s-4-.3-5.8-1.2Z" fill="#a855f7" opacity="0.85" />
+        </svg>
+      );
+    case 'parsnip':
+      return (
+        <svg viewBox="0 0 24 24" className="w-4 h-4 shrink-0" aria-hidden="true">
+          <path d="M12 5.5c-1.4-1.8-3.2-2.6-4.5-2.2.3 1.4 1.5 2.4 3 2.7M12 5.5c.1-2 1.2-3.4 2.4-3.8.6 1.3.1 2.8-1.1 3.8M12 5.5c1.6-1.3 3.4-1.6 4.5-.8-.5 1.1-2 1.8-3.4 1.6" fill="none" stroke="#15803d" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M8 7.5c0-1.3 1.8-2 4-2s4 .7 4 2c0 2.5-1.7 5.5-2.6 8.5-.6 2-1 4.2-1.4 5.5-.4-1.3-.8-3.5-1.4-5.5C9.7 13 8 10 8 7.5Z" fill="#fef3c7" stroke="#d97706" strokeWidth="1.3" strokeLinejoin="round" />
+          <path d="M10.2 10h2.5M10.8 13.5h2" stroke="#eab308" strokeWidth="1.2" strokeLinecap="round" />
+        </svg>
+      );
+    case 'broccoli':
+      return (
+        <svg viewBox="0 0 24 24" className="w-4 h-4 shrink-0" aria-hidden="true">
+          <path d="M10.5 13v6.5c0 .8.7 1.5 1.5 1.5s1.5-.7 1.5-1.5V13" fill="#86efac" stroke="#15803d" strokeWidth="1.4" strokeLinecap="round" />
+          <path d="M8.5 13.5c-2 0-3.5-1.5-3.5-3.4 0-1.5 1-2.8 2.4-3.2C7.8 4.7 9.7 3 12 3s4.2 1.7 4.6 3.9c1.4.4 2.4 1.7 2.4 3.2 0 1.9-1.5 3.4-3.5 3.4H8.5Z" fill="#16a34a" stroke="#14532d" strokeWidth="1.3" strokeLinejoin="round" />
+          <circle cx="9.5" cy="8.5" r="1.1" fill="#4ade80" />
+          <circle cx="13.5" cy="7.5" r="1.2" fill="#4ade80" />
+          <circle cx="14.8" cy="10.2" r="0.9" fill="#4ade80" />
+        </svg>
+      );
+    default:
+      return <span className="text-sm leading-none">{item.emoji}</span>;
+  }
+};
 
 interface SeasonTabsProps {
   activeTab: Season | 'all' | 'planner';
@@ -206,11 +247,11 @@ export const SeasonTabs: React.FC<SeasonTabsProps> = ({
             </div>
           </div>
 
-          {/* Seasonal Produce tags (10 principaux ingrédients de saison avec logo) */}
+          {/* Seasonal Produce tags (principaux ingrédients de saison avec illustration) */}
           <div className="flex flex-col gap-1.5 lg:items-end">
             <div className="flex items-center gap-1.5 text-xs font-semibold text-stone-600 uppercase tracking-wider">
               <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-              <span>Produits du moment (10 de saison) :</span>
+              <span>Produits du moment ({SEASONS[activeTab].produce.length} de saison) :</span>
             </div>
             <div className="flex items-center gap-1.5 flex-wrap lg:justify-end">
               {SEASONS[activeTab].produce.map((item) => (
@@ -218,7 +259,7 @@ export const SeasonTabs: React.FC<SeasonTabsProps> = ({
                   key={item.name}
                   className="text-xs px-2.5 py-1 rounded-full bg-white text-stone-800 border border-stone-200/90 shadow-2xs font-medium inline-flex items-center gap-1.5 hover:border-stone-300 transition-colors"
                 >
-                  <span className="text-sm leading-none">{item.emoji}</span>
+                  <ProduceIllustration item={item} />
                   <span>{item.name}</span>
                 </span>
               ))}
