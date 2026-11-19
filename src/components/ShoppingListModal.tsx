@@ -2,6 +2,7 @@ import { CheckSquare, Copy, Search, ShoppingCart, Square, X } from 'lucide-react
 import React, { useMemo, useState } from 'react';
 import {
   CATEGORY_METADATA,
+  getSlotRecipeIds,
   INGREDIENT_CATEGORIES,
   IngredientCategory,
   normalizeIngredientCategory,
@@ -41,18 +42,24 @@ export const ShoppingListModal: React.FC<ShoppingListModalProps> = ({
     return map;
   }, [recipes]);
 
-  // Aggregate all assigned recipes across BOTH weeks (14 days) into 1 single global list
+  // Aggregate all assigned recipes across BOTH weeks (14 days, up to 4 recipes per slot) into 1 single global list
   const plannedRecipes = useMemo(() => {
     const list: Recipe[] = [];
     plans.forEach((plan) => {
       Object.values(plan.days).forEach((day) => {
         // If lunch is marked as leftover of previous night, do not double-count ingredients
-        if (day.lunchRecipeId && !day.lunchIsLeftover && recipeMap.has(day.lunchRecipeId)) {
-          list.push(recipeMap.get(day.lunchRecipeId)!);
+        if (!day.lunchIsLeftover) {
+          getSlotRecipeIds(day, 'lunch').forEach((rid) => {
+            if (recipeMap.has(rid)) {
+              list.push(recipeMap.get(rid)!);
+            }
+          });
         }
-        if (day.dinnerRecipeId && recipeMap.has(day.dinnerRecipeId)) {
-          list.push(recipeMap.get(day.dinnerRecipeId)!);
-        }
+        getSlotRecipeIds(day, 'dinner').forEach((rid) => {
+          if (recipeMap.has(rid)) {
+            list.push(recipeMap.get(rid)!);
+          }
+        });
       });
     });
     return list;

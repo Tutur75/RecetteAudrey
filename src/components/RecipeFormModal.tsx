@@ -17,6 +17,7 @@ import { optimizeImageFile } from '../lib/storage';
 import {
   CATEGORY_METADATA,
   INGREDIENT_CATEGORIES,
+  INGREDIENT_UNITS,
   Ingredient,
   normalizeIngredientCategory,
   Recipe,
@@ -136,15 +137,13 @@ export const RecipeFormModal: React.FC<RecipeFormModalProps> = ({
           category: normalizeIngredientCategory(ing.category, ing.name)
         }))
       : [
-          { id: '1', name: 'Beurre demi-sel', amount: '30', unit: 'g', category: 'Laiterie & Fromage' },
-          { id: '2', name: 'Échalotes', amount: '2', unit: 'pièces', category: 'Fruits & Légumes' }
+          { id: '1', name: 'Beurre demi-sel', amount: '30', unit: 'G', category: 'Laiterie & Fromage' },
+          { id: '2', name: 'Échalotes', amount: '2', unit: '', category: 'Fruits & Légumes' }
         ]
   );
 
   const [instructions, setInstructions] = useState<string[]>(
-    recipe?.instructions?.length
-      ? recipe.instructions
-      : ['Préparer tous les ingrédients et tailler les légumes.', 'Faire cuire à feu doux dans une cocotte.']
+    recipe?.instructions ? recipe.instructions : []
   );
 
   const [isCompressingPhoto, setIsCompressingPhoto] = useState(false);
@@ -184,7 +183,7 @@ export const RecipeFormModal: React.FC<RecipeFormModalProps> = ({
         id: Date.now().toString(),
         name: '',
         amount: '1',
-        unit: 'pièce',
+        unit: 'G',
         category: 'Fruits & Légumes'
       }
     ]);
@@ -264,10 +263,6 @@ export const RecipeFormModal: React.FC<RecipeFormModalProps> = ({
     }
 
     const filteredSteps = instructions.filter((s) => s.trim().length > 0);
-    if (filteredSteps.length === 0) {
-      setErrorMsg('Veuillez ajouter au moins une étape de préparation.');
-      return;
-    }
 
     // Automatically clean up tags (trim, deduplicate, strip #)
     const cleanedTags = Array.from(
@@ -647,13 +642,23 @@ export const RecipeFormModal: React.FC<RecipeFormModalProps> = ({
                     onChange={(e) => handleUpdateIngredient(ing.id, 'amount', e.target.value)}
                     className="w-20 px-3 py-2 rounded-xl border border-stone-300 text-sm"
                   />
-                  <input
-                    type="text"
-                    placeholder="Unité (g, botte...)"
+                  <select
                     value={ing.unit || ''}
                     onChange={(e) => handleUpdateIngredient(ing.id, 'unit', e.target.value)}
-                    className="w-24 px-3 py-2 rounded-xl border border-stone-300 text-sm"
-                  />
+                    className="w-24 sm:w-28 px-2.5 py-2 rounded-xl border border-stone-300 text-sm bg-white text-stone-900 font-medium shrink-0"
+                    title="Unité de quantité"
+                  >
+                    <option value="">Unité...</option>
+                    {ing.unit &&
+                      !(INGREDIENT_UNITS as readonly string[]).includes(ing.unit) && (
+                        <option value={ing.unit}>{ing.unit}</option>
+                      )}
+                    {INGREDIENT_UNITS.map((u) => (
+                      <option key={u} value={u}>
+                        {u}
+                      </option>
+                    ))}
+                  </select>
                   <select
                     value={normalizeIngredientCategory(ing.category, ing.name)}
                     onChange={(e) => handleUpdateIngredient(ing.id, 'category', e.target.value)}
@@ -681,45 +686,52 @@ export const RecipeFormModal: React.FC<RecipeFormModalProps> = ({
             </div>
           </div>
 
-          {/* Instructions Steps */}
+          {/* Instructions Steps (optional) */}
           <div className="space-y-3">
             <div className="flex items-center justify-between pb-1 border-b border-stone-200">
-              <label className="text-xs font-semibold uppercase tracking-wider text-stone-700">
-                Étapes de préparation ({instructions.length}) *
+              <label className="text-xs font-semibold uppercase tracking-wider text-stone-700 flex items-center gap-1.5">
+                <span>Étapes de préparation ({instructions.length})</span>
+                <span className="text-[11px] font-normal text-stone-500 lowercase">(facultatif)</span>
               </label>
               <button
                 type="button"
                 onClick={handleAddStep}
-                className="inline-flex items-center gap-1 text-xs font-semibold text-orange-700 hover:text-orange-800"
+                className="inline-flex items-center gap-1 text-xs font-semibold text-orange-700 hover:text-orange-800 cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>Ajouter une étape</span>
               </button>
             </div>
 
-            <div className="space-y-3">
-              {instructions.map((step, idx) => (
-                <div key={idx} className="flex items-start gap-2.5">
-                  <span className="w-6 h-6 rounded-full bg-stone-200 text-stone-700 font-bold text-xs flex items-center justify-center shrink-0 mt-2">
-                    {idx + 1}
-                  </span>
-                  <textarea
-                    rows={2}
-                    value={step}
-                    onChange={(e) => handleUpdateStep(idx, e.target.value)}
-                    placeholder={`Étape ${idx + 1}...`}
-                    className="flex-1 px-3 py-2 rounded-xl border border-stone-300 text-sm"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveStep(idx)}
-                    className="p-2 text-stone-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 mt-1"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
-            </div>
+            {instructions.length === 0 ? (
+              <p className="text-xs text-stone-500 italic py-2 px-3 rounded-xl bg-stone-50 border border-dashed border-stone-200">
+                Aucune étape ajoutée (facultatif). Vous pouvez enregistrer la recette directement ou cliquer sur « Ajouter une étape ».
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {instructions.map((step, idx) => (
+                  <div key={idx} className="flex items-start gap-2.5">
+                    <span className="w-6 h-6 rounded-full bg-stone-200 text-stone-700 font-bold text-xs flex items-center justify-center shrink-0 mt-2">
+                      {idx + 1}
+                    </span>
+                    <textarea
+                      rows={2}
+                      value={step}
+                      onChange={(e) => handleUpdateStep(idx, e.target.value)}
+                      placeholder={`Étape ${idx + 1}...`}
+                      className="flex-1 px-3 py-2 rounded-xl border border-stone-300 text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveStep(idx)}
+                      className="p-2 text-stone-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 mt-1"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Audrey's Personal Notes & Wine pairing */}

@@ -18,7 +18,7 @@ import {
 import React, { useState } from 'react';
 import { INITIAL_MEAL_PLANS } from '../data/seedRecipes';
 import { getUpcomingWeekDates } from '../lib/dates';
-import { DayKey, formatServings, Recipe, recipeMatchesSeason, Season, WeekPlan } from '../types/recipe';
+import { DayKey, formatServings, getSlotRecipeIds, MAX_RECIPES_PER_SLOT, Recipe, recipeMatchesSeason, Season, WeekPlan } from '../types/recipe';
 import { ShoppingListModal } from './ShoppingListModal';
 
 interface MealPlannerProps {
@@ -29,13 +29,13 @@ interface MealPlannerProps {
 }
 
 const DAYS_OF_WEEK: { key: DayKey; label: string }[] = [
+  { key: 'saturday', label: 'Samedi' },
+  { key: 'sunday', label: 'Dimanche' },
   { key: 'monday', label: 'Lundi' },
   { key: 'tuesday', label: 'Mardi' },
   { key: 'wednesday', label: 'Mercredi' },
   { key: 'thursday', label: 'Jeudi' },
-  { key: 'friday', label: 'Vendredi' },
-  { key: 'saturday', label: 'Samedi' },
-  { key: 'sunday', label: 'Dimanche' }
+  { key: 'friday', label: 'Vendredi' }
 ];
 
 const CUSTOM_MEAL_PRESETS = [
@@ -115,11 +115,11 @@ export const MealPlanner: React.FC<MealPlannerProps> = ({
     return weekIndex === 1 ? planWeek1 : planWeek2;
   };
 
-  // Helper to find the previous evening's dinner for a given day in a given week
+  // Helper to find the previous evening's dinner for a given day in a given week (Saturday -> Friday week)
   const getPreviousEveningDinner = (
     weekIndex: 1 | 2,
     dayKey: DayKey
-  ): { recipeId?: string | null; customText?: string | null; fromDayLabel: string } => {
+  ): { recipeIds: string[]; customText?: string | null; fromDayLabel: string } => {
     const plan = getPlanByWeek(weekIndex);
     const dayIndex = DAYS_OF_WEEK.findIndex((d) => d.key === dayKey);
 
@@ -127,18 +127,18 @@ export const MealPlanner: React.FC<MealPlannerProps> = ({
       const prevDayKey = DAYS_OF_WEEK[dayIndex - 1].key;
       const prevDayData = plan.days[prevDayKey] || {};
       return {
-        recipeId: prevDayData.dinnerRecipeId,
+        recipeIds: getSlotRecipeIds(prevDayData, 'dinner'),
         customText: prevDayData.dinnerCustomText,
         fromDayLabel: DAYS_OF_WEEK[dayIndex - 1].label
       };
     } else {
-      // Monday lunch: check Sunday dinner of previous week (if week 2, look at week 1 Sunday)
+      // Saturday lunch: check Friday dinner of previous week (if week 2, look at week 1 Friday)
       const prevPlan = weekIndex === 2 ? planWeek1 : planWeek2;
-      const sundayData = prevPlan?.days.sunday || {};
+      const fridayData = prevPlan?.days.friday || {};
       return {
-        recipeId: sundayData.dinnerRecipeId,
-        customText: sundayData.dinnerCustomText,
-        fromDayLabel: weekIndex === 2 ? 'Dimanche soir (Semaine prochaine +1)' : 'Dimanche soir'
+        recipeIds: getSlotRecipeIds(fridayData, 'dinner'),
+        customText: fridayData.dinnerCustomText,
+        fromDayLabel: weekIndex === 2 ? 'Vendredi soir (Semaine prochaine +1)' : 'Vendredi soir'
       };
     }
   };
@@ -146,7 +146,7 @@ export const MealPlanner: React.FC<MealPlannerProps> = ({
   // Force / Copy previous evening's dinner to lunch (les restes) for a specific week
   const handleCopyPrevDinnerToLunch = async (weekIndex: 1 | 2, dayKey: DayKey) => {
     const prev = getPreviousEveningDinner(weekIndex, dayKey);
-    if (!prev.recipeId && !prev.customText) {
+    if (prev.recipeIds.length === 0 && !prev.customText) {
       alert(`Aucun plat n'a été planifié pour le dîner de la veille (${prev.fromDayLabel}).`);
       return;
     }
@@ -155,8 +155,9 @@ export const MealPlanner: React.FC<MealPlannerProps> = ({
     const currentDay = currentPlan.days[dayKey] || {};
     const updatedDay = {
       ...currentDay,
-      lunchRecipeId: prev.recipeId || null,
-      lunchCustomText: prev.recipeId ? null : prev.customText || null,
+      lunchRecipeIds: prev.recipeIds,
+      lunchRecipeId: prev.recipeIds[0] || null,
+      lunchCustomText: prev.recipeIds.length > 0 ? null : prev.customText || null,
       lunchIsLeftover: true
     };
 
@@ -185,11 +186,12 @@ export const MealPlanner: React.FC<MealPlannerProps> = ({
     const newDays = { ...currentPlan.days };
     DAYS_OF_WEEK.forEach((d) => {
       const prev = getPreviousEveningDinner(weekIndex, d.key);
-      if (prev.recipeId || prev.customText) {
+      if (prev.recipeIds.length > 0 || prev.customText) {
         newDays[d.key] = {
           ...(newDays[d.key] || {}),
-          lunchRecipeId: prev.recipeId || null,
-          lunchCustomText: prev.recipeId ? null : prev.customText || null,
+          lunchRecipeIds: prev.recipeIds,
+          lunchRecipeId: prev.recipeIds[0] || null,
+          lunchCustomText: prev.recipeIds.length > 0 ? null : prev.customText || null,
           lunchIsLeftover: true
         };
       }
@@ -206,16 +208,34 @@ export const MealPlanner: React.FC<MealPlannerProps> = ({
     await onSavePlan(updatedPlan);
   };
 
-  // Change slot recipe from picker
+  // Add a recipe to slot from picker (up to 4 recipes per meal slot)
   const handleAssignRecipe = async (recipeId: string | null) => {
     if (!pickerSlot) return;
     const { weekIndex, day, slot } = pickerSlot;
     const currentPlan = getPlanByWeek(weekIndex);
-
     const currentDay = currentPlan.days[day] || {};
+
+    let nextIds: string[];
+    if (!recipeId) {
+      nextIds = [];
+    } else {
+      const existingIds = getSlotRecipeIds(currentDay, slot);
+      if (existingIds.includes(recipeId)) {
+        setPickerSlot(null);
+        return;
+      }
+      if (existingIds.length >= MAX_RECIPES_PER_SLOT) {
+        alert(`Vous pouvez ajouter au maximum ${MAX_RECIPES_PER_SLOT} recettes par repas.`);
+        setPickerSlot(null);
+        return;
+      }
+      nextIds = [...existingIds, recipeId];
+    }
+
     const updatedDay = {
       ...currentDay,
-      [slot === 'lunch' ? 'lunchRecipeId' : 'dinnerRecipeId']: recipeId,
+      [slot === 'lunch' ? 'lunchRecipeIds' : 'dinnerRecipeIds']: nextIds,
+      [slot === 'lunch' ? 'lunchRecipeId' : 'dinnerRecipeId']: nextIds[0] || null,
       [slot === 'lunch' ? 'lunchCustomText' : 'dinnerCustomText']: null,
       [slot === 'lunch' ? 'lunchIsLeftover' : 'dinnerIsLeftover']: false
     };
@@ -244,6 +264,7 @@ export const MealPlanner: React.FC<MealPlannerProps> = ({
     const currentDay = currentPlan.days[day] || {};
     const updatedDay = {
       ...currentDay,
+      [slot === 'lunch' ? 'lunchRecipeIds' : 'dinnerRecipeIds']: [],
       [slot === 'lunch' ? 'lunchRecipeId' : 'dinnerRecipeId']: null,
       [slot === 'lunch' ? 'lunchCustomText' : 'dinnerCustomText']: text.trim(),
       [slot === 'lunch' ? 'lunchIsLeftover' : 'dinnerIsLeftover']: text.toLowerCase().includes('reste')
@@ -265,12 +286,50 @@ export const MealPlanner: React.FC<MealPlannerProps> = ({
     setCustomInputText('');
   };
 
-  // Remove dish or custom text directly from card
+  // Remove a single recipe from a multi-recipe meal slot
+  const handleRemoveSingleRecipe = async (
+    weekIndex: 1 | 2,
+    day: DayKey,
+    slot: 'lunch' | 'dinner',
+    recipeIdToRemove: string
+  ) => {
+    const currentPlan = getPlanByWeek(weekIndex);
+    const currentDay = currentPlan.days[day] || {};
+    const existingIds = getSlotRecipeIds(currentDay, slot);
+    const nextIds = existingIds.filter((id) => id !== recipeIdToRemove);
+
+    const updatedDay = {
+      ...currentDay,
+      [slot === 'lunch' ? 'lunchRecipeIds' : 'dinnerRecipeIds']: nextIds,
+      [slot === 'lunch' ? 'lunchRecipeId' : 'dinnerRecipeId']: nextIds[0] || null,
+      ...(nextIds.length === 0
+        ? {
+            [slot === 'lunch' ? 'lunchIsLeftover' : 'dinnerIsLeftover']: false
+          }
+        : {})
+    };
+
+    const updatedPlan: WeekPlan = {
+      ...currentPlan,
+      id: weekIndex === 1 ? 'week-1' : 'week-2',
+      weekIndex,
+      days: {
+        ...currentPlan.days,
+        [day]: updatedDay
+      },
+      updatedAt: new Date().toISOString()
+    };
+
+    await onSavePlan(updatedPlan);
+  };
+
+  // Remove all dishes or custom text directly from slot
   const handleRemoveRecipe = async (weekIndex: 1 | 2, day: DayKey, slot: 'lunch' | 'dinner') => {
     const currentPlan = getPlanByWeek(weekIndex);
     const currentDay = currentPlan.days[day] || {};
     const updatedDay = {
       ...currentDay,
+      [slot === 'lunch' ? 'lunchRecipeIds' : 'dinnerRecipeIds']: [],
       [slot === 'lunch' ? 'lunchRecipeId' : 'dinnerRecipeId']: null,
       [slot === 'lunch' ? 'lunchCustomText' : 'dinnerCustomText']: null,
       [slot === 'lunch' ? 'lunchIsLeftover' : 'dinnerIsLeftover']: false
@@ -290,7 +349,7 @@ export const MealPlanner: React.FC<MealPlannerProps> = ({
     await onSavePlan(updatedPlan);
   };
 
-  // Move or Swap meal between source and destination slots (supports cross-week if in 14-day view)
+  // Move or Swap meal between source and destination slots (supports multi-recipe slots & cross-week)
   const handleMoveOrSwapMeal = async (
     source: DragSource,
     destination: { weekIndex: 1 | 2; day: DayKey; slot: 'lunch' | 'dinner' }
@@ -303,6 +362,16 @@ export const MealPlanner: React.FC<MealPlannerProps> = ({
       return;
     }
 
+    const srcRecipeIdsField = source.slot === 'lunch' ? 'lunchRecipeIds' : 'dinnerRecipeIds';
+    const srcRecipeField = source.slot === 'lunch' ? 'lunchRecipeId' : 'dinnerRecipeId';
+    const srcCustomField = source.slot === 'lunch' ? 'lunchCustomText' : 'dinnerCustomText';
+    const srcLeftoverField = source.slot === 'lunch' ? 'lunchIsLeftover' : 'dinnerIsLeftover';
+
+    const dstRecipeIdsField = destination.slot === 'lunch' ? 'lunchRecipeIds' : 'dinnerRecipeIds';
+    const dstRecipeField = destination.slot === 'lunch' ? 'lunchRecipeId' : 'dinnerRecipeId';
+    const dstCustomField = destination.slot === 'lunch' ? 'lunchCustomText' : 'dinnerCustomText';
+    const dstLeftoverField = destination.slot === 'lunch' ? 'lunchIsLeftover' : 'dinnerIsLeftover';
+
     if (source.weekIndex === destination.weekIndex) {
       // Intra-week move
       const plan = getPlanByWeek(source.weekIndex);
@@ -310,23 +379,21 @@ export const MealPlanner: React.FC<MealPlannerProps> = ({
       const destDayData =
         source.day === destination.day ? sourceDayData : { ...(plan.days[destination.day] || {}) };
 
-      const srcRecipeField = source.slot === 'lunch' ? 'lunchRecipeId' : 'dinnerRecipeId';
-      const srcCustomField = source.slot === 'lunch' ? 'lunchCustomText' : 'dinnerCustomText';
-      const srcLeftoverField = source.slot === 'lunch' ? 'lunchIsLeftover' : 'dinnerIsLeftover';
-
-      const dstRecipeField = destination.slot === 'lunch' ? 'lunchRecipeId' : 'dinnerRecipeId';
-      const dstCustomField = destination.slot === 'lunch' ? 'lunchCustomText' : 'dinnerCustomText';
-      const dstLeftoverField = destination.slot === 'lunch' ? 'lunchIsLeftover' : 'dinnerIsLeftover';
-
-      const srcRecipeVal = sourceDayData[srcRecipeField];
+      const srcIds = getSlotRecipeIds(sourceDayData, source.slot);
       const srcCustomVal = sourceDayData[srcCustomField];
       const srcLeftoverVal = sourceDayData[srcLeftoverField];
 
-      sourceDayData[srcRecipeField] = destDayData[dstRecipeField] || null;
-      sourceDayData[srcCustomField] = destDayData[dstCustomField] || null;
-      sourceDayData[srcLeftoverField] = destDayData[dstLeftoverField] || false;
+      const dstIds = getSlotRecipeIds(destDayData, destination.slot);
+      const dstCustomVal = destDayData[dstCustomField];
+      const dstLeftoverVal = destDayData[dstLeftoverField];
 
-      destDayData[dstRecipeField] = srcRecipeVal || null;
+      sourceDayData[srcRecipeIdsField] = dstIds;
+      sourceDayData[srcRecipeField] = dstIds[0] || null;
+      sourceDayData[srcCustomField] = dstCustomVal || null;
+      sourceDayData[srcLeftoverField] = dstLeftoverVal || false;
+
+      destDayData[dstRecipeIdsField] = srcIds;
+      destDayData[dstRecipeField] = srcIds[0] || null;
       destDayData[dstCustomField] = srcCustomVal || null;
       destDayData[dstLeftoverField] = srcLeftoverVal || false;
 
@@ -351,23 +418,21 @@ export const MealPlanner: React.FC<MealPlannerProps> = ({
       const sourceDayData = { ...(srcPlan.days[source.day] || {}) };
       const destDayData = { ...(dstPlan.days[destination.day] || {}) };
 
-      const srcRecipeField = source.slot === 'lunch' ? 'lunchRecipeId' : 'dinnerRecipeId';
-      const srcCustomField = source.slot === 'lunch' ? 'lunchCustomText' : 'dinnerCustomText';
-      const srcLeftoverField = source.slot === 'lunch' ? 'lunchIsLeftover' : 'dinnerIsLeftover';
-
-      const dstRecipeField = destination.slot === 'lunch' ? 'lunchRecipeId' : 'dinnerRecipeId';
-      const dstCustomField = destination.slot === 'lunch' ? 'lunchCustomText' : 'dinnerCustomText';
-      const dstLeftoverField = destination.slot === 'lunch' ? 'lunchIsLeftover' : 'dinnerIsLeftover';
-
-      const srcRecipeVal = sourceDayData[srcRecipeField];
+      const srcIds = getSlotRecipeIds(sourceDayData, source.slot);
       const srcCustomVal = sourceDayData[srcCustomField];
       const srcLeftoverVal = sourceDayData[srcLeftoverField];
 
-      sourceDayData[srcRecipeField] = destDayData[dstRecipeField] || null;
-      sourceDayData[srcCustomField] = destDayData[dstCustomField] || null;
-      sourceDayData[srcLeftoverField] = destDayData[dstLeftoverField] || false;
+      const dstIds = getSlotRecipeIds(destDayData, destination.slot);
+      const dstCustomVal = destDayData[dstCustomField];
+      const dstLeftoverVal = destDayData[dstLeftoverField];
 
-      destDayData[dstRecipeField] = srcRecipeVal || null;
+      sourceDayData[srcRecipeIdsField] = dstIds;
+      sourceDayData[srcRecipeField] = dstIds[0] || null;
+      sourceDayData[srcCustomField] = dstCustomVal || null;
+      sourceDayData[srcLeftoverField] = dstLeftoverVal || false;
+
+      destDayData[dstRecipeIdsField] = srcIds;
+      destDayData[dstRecipeField] = srcIds[0] || null;
       destDayData[dstCustomField] = srcCustomVal || null;
       destDayData[dstLeftoverField] = srcLeftoverVal || false;
 
@@ -528,11 +593,17 @@ export const MealPlanner: React.FC<MealPlannerProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-3.5">
           {DAYS_OF_WEEK.map((day) => {
             const dayPlan = plan.days[day.key] || {};
-            const lunchRecipe = dayPlan.lunchRecipeId ? recipeMap.get(dayPlan.lunchRecipeId) : null;
-            const dinnerRecipe = dayPlan.dinnerRecipeId ? recipeMap.get(dayPlan.dinnerRecipeId) : null;
+            const lunchIds = getSlotRecipeIds(dayPlan, 'lunch');
+            const dinnerIds = getSlotRecipeIds(dayPlan, 'dinner');
+            const lunchRecipes = lunchIds
+              .map((id) => recipeMap.get(id))
+              .filter((r): r is Recipe => !!r);
+            const dinnerRecipes = dinnerIds
+              .map((id) => recipeMap.get(id))
+              .filter((r): r is Recipe => !!r);
 
-            const hasLunch = !!lunchRecipe || !!dayPlan.lunchCustomText;
-            const hasDinner = !!dinnerRecipe || !!dayPlan.dinnerCustomText;
+            const hasLunch = lunchRecipes.length > 0 || !!dayPlan.lunchCustomText;
+            const hasDinner = dinnerRecipes.length > 0 || !!dayPlan.dinnerCustomText;
 
             const isLunchDragOver =
               dragOverTarget?.weekIndex === plan.weekIndex &&
@@ -545,7 +616,12 @@ export const MealPlanner: React.FC<MealPlannerProps> = ({
               dragOverTarget?.slot === 'dinner';
 
             const prevDinnerInfo = getPreviousEveningDinner(plan.weekIndex, day.key);
-            const hasPrevDinner = !!prevDinnerInfo.recipeId || !!prevDinnerInfo.customText;
+            const hasPrevDinner = prevDinnerInfo.recipeIds.length > 0 || !!prevDinnerInfo.customText;
+
+            const lunchImageHeight =
+              lunchRecipes.length >= 3 ? 'h-10' : lunchRecipes.length === 2 ? 'h-14' : 'h-22';
+            const dinnerImageHeight =
+              dinnerRecipes.length >= 3 ? 'h-10' : dinnerRecipes.length === 2 ? 'h-14' : 'h-22';
 
             return (
               <div
@@ -578,7 +654,12 @@ export const MealPlanner: React.FC<MealPlannerProps> = ({
                     <div className="flex items-center justify-between text-xs font-semibold text-stone-700 uppercase tracking-wider">
                       <span className="flex items-center gap-1 text-amber-700">
                         <Sun className="w-3.5 h-3.5" />
-                        Midi
+                        <span>Midi</span>
+                        {lunchRecipes.length > 1 && (
+                          <span className="text-[10px] font-bold bg-amber-100 text-amber-900 px-1.5 py-0.2 rounded-full">
+                            {lunchRecipes.length}/{MAX_RECIPES_PER_SLOT}
+                          </span>
+                        )}
                       </span>
                       {hasLunch ? (
                         <div className="flex items-center gap-1">
@@ -590,15 +671,15 @@ export const MealPlanner: React.FC<MealPlannerProps> = ({
                                 slot: 'lunch'
                               })
                             }
-                            className="text-stone-400 hover:text-stone-700 p-0.5 rounded-sm"
+                            className="text-stone-400 hover:text-stone-700 p-0.5 rounded-sm cursor-pointer"
                             title="Déplacer vers un autre jour"
                           >
                             <ArrowLeftRight className="w-3.5 h-3.5" />
                           </button>
                           <button
                             onClick={() => handleRemoveRecipe(plan.weekIndex, day.key, 'lunch')}
-                            className="text-stone-400 hover:text-rose-600 p-0.5 rounded-sm"
-                            title="Retirer ce plat"
+                            className="text-stone-400 hover:text-rose-600 p-0.5 rounded-sm cursor-pointer"
+                            title={lunchRecipes.length > 1 ? 'Vider le midi' : 'Retirer ce plat'}
                           >
                             <X className="w-3.5 h-3.5" />
                           </button>
@@ -617,46 +698,88 @@ export const MealPlanner: React.FC<MealPlannerProps> = ({
                       )}
                     </div>
 
-                    {/* Lunch Display: Photo above title, servings count, no prep time */}
-                    {lunchRecipe ? (
-                      <div
-                        draggable={true}
-                        onDragStart={(e) => onDragStart(e, plan.weekIndex, day.key, 'lunch')}
-                        className="group relative rounded-xl border border-stone-200 p-2 bg-stone-50/80 hover:bg-stone-100/90 hover:border-orange-300 transition-all cursor-grab active:cursor-grabbing shadow-2xs"
-                      >
-                        {/* Photo on top */}
-                        <div className="relative w-full h-22 rounded-lg overflow-hidden bg-stone-200 mb-1.5">
-                          <img
-                            src={lunchRecipe.imageUrl}
-                            alt={lunchRecipe.title}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          />
-                          <div className="absolute top-1 left-1 flex items-center gap-1">
-                            {dayPlan.lunchIsLeftover && (
-                              <span className="text-[9px] font-bold bg-amber-500 text-white px-1.5 py-0.5 rounded-md shadow-xs">
-                                🥘 Restes
+                    {/* Lunch Display: Up to 4 recipes stacked cleanly with compact image scaling */}
+                    {lunchRecipes.length > 0 ? (
+                      <div className="space-y-1.5">
+                        {lunchRecipes.map((lunchRecipe, idx) => (
+                          <div
+                            key={`${lunchRecipe.id}-${idx}`}
+                            draggable={true}
+                            onDragStart={(e) => onDragStart(e, plan.weekIndex, day.key, 'lunch')}
+                            className={`group relative rounded-xl border border-stone-200 bg-stone-50/80 hover:bg-stone-100/90 hover:border-orange-300 transition-all cursor-grab active:cursor-grabbing shadow-2xs ${
+                              lunchRecipes.length >= 2 ? 'p-1.5' : 'p-2'
+                            }`}
+                          >
+                            {/* Photo on top (smaller when multiple recipes) */}
+                            <div className={`relative w-full ${lunchImageHeight} rounded-lg overflow-hidden bg-stone-200 mb-1 transition-all`}>
+                              <img
+                                src={lunchRecipe.imageUrl}
+                                alt={lunchRecipe.title}
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              />
+                              <div className="absolute top-1 left-1 flex items-center gap-1">
+                                {dayPlan.lunchIsLeftover && idx === 0 && (
+                                  <span className="text-[9px] font-bold bg-amber-500 text-white px-1.5 py-0.5 rounded-md shadow-xs">
+                                    🥘 Restes
+                                  </span>
+                                )}
+                              </div>
+                              <div className="absolute top-1 right-1 flex items-center gap-1">
+                                <span className="bg-black/40 text-white p-0.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <GripVertical className="w-3 h-3" />
+                                </span>
+                                {lunchRecipes.length > 1 && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleRemoveSingleRecipe(plan.weekIndex, day.key, 'lunch', lunchRecipe.id);
+                                    }}
+                                    className="bg-black/55 hover:bg-rose-600 text-white p-0.5 rounded-md transition-colors cursor-pointer"
+                                    title={`Retirer ${lunchRecipe.title}`}
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Recipe title */}
+                            <p
+                              onClick={() => onViewRecipe(lunchRecipe)}
+                              className={`font-semibold text-stone-900 hover:text-orange-700 cursor-pointer break-words text-left ${
+                                lunchRecipes.length >= 2 ? 'text-[11px] leading-tight' : 'text-xs leading-snug'
+                              }`}
+                            >
+                              {lunchRecipe.title}
+                            </p>
+
+                            <div className="flex items-center justify-between text-[10px] text-stone-500 font-medium mt-1 pt-0.5 border-t border-stone-200/60">
+                              <span className="flex items-center gap-1">
+                                <span>👥</span>
+                                <span>{formatServings(lunchRecipe.servings)}</span>
                               </span>
-                            )}
+                            </div>
                           </div>
-                          <div className="absolute top-1 right-1 bg-black/40 text-white p-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity">
-                            <GripVertical className="w-3 h-3" />
-                          </div>
-                        </div>
+                        ))}
 
-                        {/* Full recipe title without truncation */}
-                        <p
-                          onClick={() => onViewRecipe(lunchRecipe)}
-                          className="text-xs font-semibold text-stone-900 hover:text-orange-700 cursor-pointer leading-snug break-words text-left"
-                        >
-                          {lunchRecipe.title}
-                        </p>
-
-                        <div className="flex items-center justify-between text-[11px] text-stone-500 font-medium mt-1 pt-1 border-t border-stone-200/60">
-                          <span className="flex items-center gap-1">
-                            <span>👥</span>
-                            <span>{formatServings(lunchRecipe.servings)}</span>
-                          </span>
-                        </div>
+                        {lunchRecipes.length < MAX_RECIPES_PER_SLOT && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setPickerSlot({
+                                weekIndex: plan.weekIndex,
+                                day: day.key,
+                                slot: 'lunch'
+                              })
+                            }
+                            className="w-full py-1 px-2 rounded-lg border border-dashed border-stone-300 hover:border-orange-400 text-stone-600 hover:text-orange-700 bg-stone-50/50 hover:bg-orange-50/40 text-[11px] font-medium flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                            title="Ajouter une autre recette en parallèle pour ce midi"
+                          >
+                            <Plus className="w-3 h-3" />
+                            <span>Ajouter ({lunchRecipes.length}/{MAX_RECIPES_PER_SLOT})</span>
+                          </button>
+                        )}
                       </div>
                     ) : dayPlan.lunchCustomText ? (
                       /* Custom text block */
@@ -722,7 +845,12 @@ export const MealPlanner: React.FC<MealPlannerProps> = ({
                     <div className="flex items-center justify-between text-xs font-semibold text-stone-700 uppercase tracking-wider">
                       <span className="flex items-center gap-1 text-indigo-700">
                         <Moon className="w-3.5 h-3.5" />
-                        Soir
+                        <span>Soir</span>
+                        {dinnerRecipes.length > 1 && (
+                          <span className="text-[10px] font-bold bg-indigo-100 text-indigo-900 px-1.5 py-0.2 rounded-full">
+                            {dinnerRecipes.length}/{MAX_RECIPES_PER_SLOT}
+                          </span>
+                        )}
                       </span>
                       {hasDinner && (
                         <div className="flex items-center gap-1">
@@ -734,15 +862,15 @@ export const MealPlanner: React.FC<MealPlannerProps> = ({
                                 slot: 'dinner'
                               })
                             }
-                            className="text-stone-400 hover:text-stone-700 p-0.5 rounded-sm"
+                            className="text-stone-400 hover:text-stone-700 p-0.5 rounded-sm cursor-pointer"
                             title="Déplacer vers un autre jour"
                           >
                             <ArrowLeftRight className="w-3.5 h-3.5" />
                           </button>
                           <button
                             onClick={() => handleRemoveRecipe(plan.weekIndex, day.key, 'dinner')}
-                            className="text-stone-400 hover:text-rose-600 p-0.5 rounded-sm"
-                            title="Retirer ce plat"
+                            className="text-stone-400 hover:text-rose-600 p-0.5 rounded-sm cursor-pointer"
+                            title={dinnerRecipes.length > 1 ? 'Vider le soir' : 'Retirer ce plat'}
                           >
                             <X className="w-3.5 h-3.5" />
                           </button>
@@ -750,38 +878,80 @@ export const MealPlanner: React.FC<MealPlannerProps> = ({
                       )}
                     </div>
 
-                    {dinnerRecipe ? (
-                      <div
-                        draggable={true}
-                        onDragStart={(e) => onDragStart(e, plan.weekIndex, day.key, 'dinner')}
-                        className="group relative rounded-xl border border-stone-200 p-2 bg-stone-50/80 hover:bg-stone-100/90 hover:border-orange-300 transition-all cursor-grab active:cursor-grabbing shadow-2xs"
-                      >
-                        {/* Photo on top */}
-                        <div className="relative w-full h-22 rounded-lg overflow-hidden bg-stone-200 mb-1.5">
-                          <img
-                            src={dinnerRecipe.imageUrl}
-                            alt={dinnerRecipe.title}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          />
-                          <div className="absolute top-1 right-1 bg-black/40 text-white p-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity">
-                            <GripVertical className="w-3 h-3" />
+                    {dinnerRecipes.length > 0 ? (
+                      <div className="space-y-1.5">
+                        {dinnerRecipes.map((dinnerRecipe, idx) => (
+                          <div
+                            key={`${dinnerRecipe.id}-${idx}`}
+                            draggable={true}
+                            onDragStart={(e) => onDragStart(e, plan.weekIndex, day.key, 'dinner')}
+                            className={`group relative rounded-xl border border-stone-200 bg-stone-50/80 hover:bg-stone-100/90 hover:border-orange-300 transition-all cursor-grab active:cursor-grabbing shadow-2xs ${
+                              dinnerRecipes.length >= 2 ? 'p-1.5' : 'p-2'
+                            }`}
+                          >
+                            {/* Photo on top (smaller when multiple recipes) */}
+                            <div className={`relative w-full ${dinnerImageHeight} rounded-lg overflow-hidden bg-stone-200 mb-1 transition-all`}>
+                              <img
+                                src={dinnerRecipe.imageUrl}
+                                alt={dinnerRecipe.title}
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              />
+                              <div className="absolute top-1 right-1 flex items-center gap-1">
+                                <span className="bg-black/40 text-white p-0.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <GripVertical className="w-3 h-3" />
+                                </span>
+                                {dinnerRecipes.length > 1 && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleRemoveSingleRecipe(plan.weekIndex, day.key, 'dinner', dinnerRecipe.id);
+                                    }}
+                                    className="bg-black/55 hover:bg-rose-600 text-white p-0.5 rounded-md transition-colors cursor-pointer"
+                                    title={`Retirer ${dinnerRecipe.title}`}
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Recipe title */}
+                            <p
+                              onClick={() => onViewRecipe(dinnerRecipe)}
+                              className={`font-semibold text-stone-900 hover:text-orange-700 cursor-pointer break-words text-left ${
+                                dinnerRecipes.length >= 2 ? 'text-[11px] leading-tight' : 'text-xs leading-snug'
+                              }`}
+                            >
+                              {dinnerRecipe.title}
+                            </p>
+
+                            <div className="flex items-center justify-between text-[10px] text-stone-500 font-medium mt-1 pt-0.5 border-t border-stone-200/60">
+                              <span className="flex items-center gap-1">
+                                <span>👥</span>
+                                <span>{formatServings(dinnerRecipe.servings)}</span>
+                              </span>
+                            </div>
                           </div>
-                        </div>
+                        ))}
 
-                        {/* Full recipe title */}
-                        <p
-                          onClick={() => onViewRecipe(dinnerRecipe)}
-                          className="text-xs font-semibold text-stone-900 hover:text-orange-700 cursor-pointer leading-snug break-words text-left"
-                        >
-                          {dinnerRecipe.title}
-                        </p>
-
-                        <div className="flex items-center justify-between text-[11px] text-stone-500 font-medium mt-1 pt-1 border-t border-stone-200/60">
-                          <span className="flex items-center gap-1">
-                            <span>👥</span>
-                            <span>{formatServings(dinnerRecipe.servings)}</span>
-                          </span>
-                        </div>
+                        {dinnerRecipes.length < MAX_RECIPES_PER_SLOT && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setPickerSlot({
+                                weekIndex: plan.weekIndex,
+                                day: day.key,
+                                slot: 'dinner'
+                              })
+                            }
+                            className="w-full py-1 px-2 rounded-lg border border-dashed border-stone-300 hover:border-indigo-400 text-stone-600 hover:text-indigo-700 bg-stone-50/50 hover:bg-indigo-50/40 text-[11px] font-medium flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                            title="Ajouter une autre recette en parallèle pour ce soir"
+                          >
+                            <Plus className="w-3 h-3" />
+                            <span>Ajouter ({dinnerRecipes.length}/{MAX_RECIPES_PER_SLOT})</span>
+                          </button>
+                        )}
                       </div>
                     ) : dayPlan.dinnerCustomText ? (
                       /* Custom text block */
@@ -1140,124 +1310,143 @@ export const MealPlanner: React.FC<MealPlannerProps> = ({
       )}
 
       {/* Recipe Picker Modal */}
-      {pickerSlot && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-stone-900/70 backdrop-blur-xs overflow-y-auto">
-          <div className="relative bg-white w-full max-w-3xl rounded-3xl shadow-2xl border border-stone-200 overflow-hidden my-auto max-h-[88vh] flex flex-col">
-            {/* Picker Header */}
-            <div className="px-6 py-4 border-b border-stone-200 flex items-center justify-between bg-stone-50">
-              <div>
-                <h3 className="text-lg font-bold text-stone-900">
-                  Choisir une recette pour la Semaine {pickerSlot.weekIndex} •{' '}
-                  <span className="text-orange-700 capitalize">
-                    {pickerSlot.slot === 'lunch' ? 'déjeuner' : 'dîner'}
-                  </span>{' '}
-                  du {DAYS_OF_WEEK.find((d) => d.key === pickerSlot.day)?.label}
-                </h3>
-                <p className="text-xs text-stone-600">
-                  Sélectionnez parmi les recettes de votre carnet
-                </p>
-              </div>
-              <button
-                onClick={() => setPickerSlot(null)}
-                className="p-2 rounded-full hover:bg-stone-200/70 text-stone-500"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      {pickerSlot && (() => {
+        const targetPlan = getPlanByWeek(pickerSlot.weekIndex);
+        const currentSlotIds = getSlotRecipeIds(targetPlan.days[pickerSlot.day], pickerSlot.slot);
 
-            {/* Picker Filters */}
-            <div className="p-4 border-b border-stone-200 space-y-3 bg-white">
-              <div className="relative">
-                <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={pickerSearch}
-                  onChange={(e) => setPickerSearch(e.target.value)}
-                  placeholder="Rechercher par titre ou tag..."
-                  className="w-full pl-9 pr-4 py-2 rounded-xl border border-stone-200 text-xs text-stone-900"
-                />
-              </div>
-
-              {/* Season tabs in picker */}
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-                <button
-                  onClick={() => setPickerSeason('all')}
-                  className={`text-xs px-2.5 py-1 rounded-lg font-medium ${
-                    pickerSeason === 'all'
-                      ? 'bg-stone-900 text-white'
-                      : 'bg-stone-100 hover:bg-stone-200 text-stone-700'
-                  }`}
-                >
-                  Toutes les saisons
-                </button>
-                {(['spring', 'summer', 'autumn', 'winter'] as Season[]).map((sKey) => {
-                  const sLabel = {
-                    spring: '🌸 Printemps',
-                    summer: '☀️ Été',
-                    autumn: '🍂 Automne',
-                    winter: '❄️ Hiver'
-                  }[sKey];
-                  return (
-                    <button
-                      key={sKey}
-                      onClick={() => setPickerSeason(sKey)}
-                      className={`text-xs px-2.5 py-1 rounded-lg font-medium flex items-center gap-1 ${
-                        pickerSeason === sKey
-                          ? 'bg-orange-700 text-white'
-                          : 'bg-stone-100 hover:bg-stone-200 text-stone-700'
-                      }`}
-                    >
-                      <span>{sLabel}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Recipe List */}
-            <div className="overflow-y-auto p-4 sm:p-6 space-y-2.5 flex-1 divide-y divide-stone-100">
-              {filteredPickerRecipes.length === 0 ? (
-                <div className="py-12 text-center text-stone-600">
-                  <UtensilsCrossed className="w-10 h-10 mx-auto text-stone-300 mb-2" />
-                  <p className="text-sm font-medium">Aucune recette trouvée avec ces critères.</p>
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-stone-900/70 backdrop-blur-xs overflow-y-auto">
+            <div className="relative bg-white w-full max-w-3xl rounded-3xl shadow-2xl border border-stone-200 overflow-hidden my-auto max-h-[88vh] flex flex-col">
+              {/* Picker Header */}
+              <div className="px-6 py-4 border-b border-stone-200 flex items-center justify-between bg-stone-50">
+                <div>
+                  <h3 className="text-lg font-bold text-stone-900 flex items-center gap-2 flex-wrap">
+                    <span>
+                      Ajouter une recette • Semaine {pickerSlot.weekIndex} •{' '}
+                      <span className="text-orange-700 capitalize">
+                        {pickerSlot.slot === 'lunch' ? 'déjeuner' : 'dîner'}
+                      </span>{' '}
+                      du {DAYS_OF_WEEK.find((d) => d.key === pickerSlot.day)?.label}
+                    </span>
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900">
+                      {currentSlotIds.length}/{MAX_RECIPES_PER_SLOT}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-stone-600">
+                    Vous pouvez associer jusqu&apos;à {MAX_RECIPES_PER_SLOT} recettes en parallèle pour ce repas
+                  </p>
                 </div>
-              ) : (
-                filteredPickerRecipes.map((r) => (
-                  <div
-                    key={r.id}
-                    className="pt-2.5 first:pt-0 flex items-center justify-between gap-3 group hover:bg-stone-50 p-2 rounded-xl transition-colors"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <img
-                        src={r.imageUrl}
-                        alt={r.title}
-                        className="w-14 h-14 rounded-xl object-cover shrink-0"
-                      />
-                      <div className="min-w-0">
-                        <h4 className="font-bold text-stone-900 text-sm">
-                          {r.title}
-                        </h4>
-                        <div className="flex items-center gap-2 text-xs text-stone-600 mt-0.5">
-                          <span>👥 {formatServings(r.servings)}</span>
-                          <span>•</span>
-                          <span>⏱️ {r.prepTime} min</span>
-                        </div>
-                      </div>
-                    </div>
+                <button
+                  onClick={() => setPickerSlot(null)}
+                  className="p-2 rounded-full hover:bg-stone-200/70 text-stone-500 cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
 
-                    <button
-                      onClick={() => handleAssignRecipe(r.id)}
-                      className="px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white text-xs font-semibold shrink-0 cursor-pointer transition-colors"
-                    >
-                      Choisir
-                    </button>
+              {/* Picker Filters */}
+              <div className="p-4 border-b border-stone-200 space-y-3 bg-white">
+                <div className="relative">
+                  <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={pickerSearch}
+                    onChange={(e) => setPickerSearch(e.target.value)}
+                    placeholder="Rechercher par titre ou tag..."
+                    className="w-full pl-9 pr-4 py-2 rounded-xl border border-stone-200 text-xs text-stone-900"
+                  />
+                </div>
+
+                {/* Season tabs in picker */}
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                  <button
+                    onClick={() => setPickerSeason('all')}
+                    className={`text-xs px-2.5 py-1 rounded-lg font-medium cursor-pointer ${
+                      pickerSeason === 'all'
+                        ? 'bg-stone-900 text-white'
+                        : 'bg-stone-100 hover:bg-stone-200 text-stone-700'
+                    }`}
+                  >
+                    Toutes les saisons
+                  </button>
+                  {(['spring', 'summer', 'autumn', 'winter'] as Season[]).map((sKey) => {
+                    const sLabel = {
+                      spring: '🌸 Printemps',
+                      summer: '☀️ Été',
+                      autumn: '🍂 Automne',
+                      winter: '❄️ Hiver'
+                    }[sKey];
+                    return (
+                      <button
+                        key={sKey}
+                        onClick={() => setPickerSeason(sKey)}
+                        className={`text-xs px-2.5 py-1 rounded-lg font-medium flex items-center gap-1 cursor-pointer ${
+                          pickerSeason === sKey
+                            ? 'bg-orange-700 text-white'
+                            : 'bg-stone-100 hover:bg-stone-200 text-stone-700'
+                        }`}
+                      >
+                        <span>{sLabel}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Recipe List */}
+              <div className="overflow-y-auto p-4 sm:p-6 space-y-2.5 flex-1 divide-y divide-stone-100">
+                {filteredPickerRecipes.length === 0 ? (
+                  <div className="py-12 text-center text-stone-600">
+                    <UtensilsCrossed className="w-10 h-10 mx-auto text-stone-300 mb-2" />
+                    <p className="text-sm font-medium">Aucune recette trouvée avec ces critères.</p>
                   </div>
-                ))
-              )}
+                ) : (
+                  filteredPickerRecipes.map((r) => {
+                    const isAlreadyInSlot = currentSlotIds.includes(r.id);
+                    return (
+                      <div
+                        key={r.id}
+                        className="pt-2.5 first:pt-0 flex items-center justify-between gap-3 group hover:bg-stone-50 p-2 rounded-xl transition-colors"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <img
+                            src={r.imageUrl}
+                            alt={r.title}
+                            className="w-14 h-14 rounded-xl object-cover shrink-0"
+                          />
+                          <div className="min-w-0">
+                            <h4 className="font-bold text-stone-900 text-sm">
+                              {r.title}
+                            </h4>
+                            <div className="flex items-center gap-2 text-xs text-stone-600 mt-0.5">
+                              <span>👥 {formatServings(r.servings)}</span>
+                              <span>•</span>
+                              <span>⏱️ {r.prepTime} min</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {isAlreadyInSlot ? (
+                          <span className="px-3 py-1.5 rounded-lg bg-stone-100 text-stone-500 text-xs font-semibold shrink-0">
+                            Déjà ajoutée ✓
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => handleAssignRecipe(r.id)}
+                            className="px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white text-xs font-semibold shrink-0 cursor-pointer transition-colors"
+                          >
+                            {currentSlotIds.length > 0 ? 'Ajouter +' : 'Choisir'}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Shopping List Modal */}
       {showShoppingList && (

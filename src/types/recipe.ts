@@ -78,17 +78,48 @@ export function recipeMatchesSeason(
   return recipe.season === targetSeason;
 }
 
+export const INGREDIENT_UNITS = [
+  'G',
+  'Kg',
+  'L',
+  'mL',
+  'Boite',
+  'Paquet',
+  'Brique'
+] as const;
+
+export const MAX_RECIPES_PER_SLOT = 4;
+
 export type MealSlot = 'lunch' | 'dinner';
 
 export interface DayPlan {
   lunchRecipeId?: string | null;
+  lunchRecipeIds?: string[]; // Up to 4 parallel recipes for lunch
   dinnerRecipeId?: string | null;
+  dinnerRecipeIds?: string[]; // Up to 4 parallel recipes for dinner
   lunchCustomText?: string | null;
   dinnerCustomText?: string | null;
   lunchIsLeftover?: boolean;
   dinnerIsLeftover?: boolean;
   lunchNotes?: string;
   dinnerNotes?: string;
+}
+
+/**
+ * Returns the list of recipe IDs assigned to a meal slot (supports legacy single ID and multi-recipe arrays up to 4).
+ */
+export function getSlotRecipeIds(dayPlan: DayPlan | undefined, slot: MealSlot): string[] {
+  if (!dayPlan) return [];
+  const arr = slot === 'lunch' ? dayPlan.lunchRecipeIds : dayPlan.dinnerRecipeIds;
+  const single = slot === 'lunch' ? dayPlan.lunchRecipeId : dayPlan.dinnerRecipeId;
+
+  if (Array.isArray(arr)) {
+    return arr.filter(Boolean).slice(0, MAX_RECIPES_PER_SLOT);
+  }
+  if (single) {
+    return [single];
+  }
+  return [];
 }
 
 export interface WeekPlan {

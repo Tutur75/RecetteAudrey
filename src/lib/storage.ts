@@ -342,12 +342,29 @@ export async function deleteRecipe(recipeId: string): Promise<void> {
       (Object.keys(days) as DayKey[]).forEach((dayKey) => {
         const slot = days[dayKey];
         if (slot) {
-          if (slot.lunchRecipeId === recipeId) {
-            days[dayKey] = { ...slot, lunchRecipeId: null };
-            modified = true;
+          const nextSlot = { ...slot };
+          let slotChanged = false;
+
+          if (Array.isArray(nextSlot.lunchRecipeIds) && nextSlot.lunchRecipeIds.includes(recipeId)) {
+            nextSlot.lunchRecipeIds = nextSlot.lunchRecipeIds.filter((id) => id !== recipeId);
+            nextSlot.lunchRecipeId = nextSlot.lunchRecipeIds[0] || null;
+            slotChanged = true;
+          } else if (nextSlot.lunchRecipeId === recipeId) {
+            nextSlot.lunchRecipeId = null;
+            slotChanged = true;
           }
-          if (slot.dinnerRecipeId === recipeId) {
-            days[dayKey] = { ...slot, dinnerRecipeId: null };
+
+          if (Array.isArray(nextSlot.dinnerRecipeIds) && nextSlot.dinnerRecipeIds.includes(recipeId)) {
+            nextSlot.dinnerRecipeIds = nextSlot.dinnerRecipeIds.filter((id) => id !== recipeId);
+            nextSlot.dinnerRecipeId = nextSlot.dinnerRecipeIds[0] || null;
+            slotChanged = true;
+          } else if (nextSlot.dinnerRecipeId === recipeId) {
+            nextSlot.dinnerRecipeId = null;
+            slotChanged = true;
+          }
+
+          if (slotChanged) {
+            days[dayKey] = nextSlot;
             modified = true;
           }
         }

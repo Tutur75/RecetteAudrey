@@ -273,22 +273,28 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
               <h3 className="font-serif text-lg font-bold text-stone-900 pb-2 border-b border-stone-200 flex items-center gap-2">
                 <span>Étapes de préparation</span>
                 <span className="text-xs font-normal text-stone-700">
-                  ({recipe.instructions.length} étapes)
+                  ({recipe.instructions?.length || 0} étape{(recipe.instructions?.length || 0) > 1 ? 's' : ''})
                 </span>
               </h3>
 
-              <ol className="space-y-4">
-                {recipe.instructions.map((step, idx) => (
-                  <li key={idx} className="flex items-start gap-3.5 group">
-                    <span className="w-7 h-7 rounded-full bg-orange-100 text-orange-800 font-bold text-xs flex items-center justify-center shrink-0 border border-orange-200 mt-0.5 group-hover:bg-orange-600 group-hover:text-white transition-colors">
-                      {idx + 1}
-                    </span>
-                    <p className="text-sm sm:text-base text-stone-800 leading-relaxed flex-1 pt-0.5">
-                      {step}
-                    </p>
-                  </li>
-                ))}
-              </ol>
+              {!recipe.instructions || recipe.instructions.length === 0 ? (
+                <p className="text-sm text-stone-500 italic py-2">
+                  Aucune étape de préparation renseignée pour cette recette.
+                </p>
+              ) : (
+                <ol className="space-y-4">
+                  {recipe.instructions.map((step, idx) => (
+                    <li key={idx} className="flex items-start gap-3.5 group">
+                      <span className="w-7 h-7 rounded-full bg-orange-100 text-orange-800 font-bold text-xs flex items-center justify-center shrink-0 border border-orange-200 mt-0.5 group-hover:bg-orange-600 group-hover:text-white transition-colors">
+                        {idx + 1}
+                      </span>
+                      <p className="text-sm sm:text-base text-stone-800 leading-relaxed flex-1 pt-0.5">
+                        {step}
+                      </p>
+                    </li>
+                  ))}
+                </ol>
+              )}
 
               {/* Action Buttons in Modal Bottom */}
               <div className="pt-6 border-t border-stone-200 flex items-center justify-between gap-3 flex-wrap">

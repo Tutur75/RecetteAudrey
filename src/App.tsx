@@ -26,7 +26,7 @@ import {
   subscribeToMealPlans,
   subscribeToRecipes
 } from './lib/storage';
-import { Recipe, recipeMatchesSeason, Season, WeekPlan } from './types/recipe';
+import { getSlotRecipeIds, MAX_RECIPES_PER_SLOT, Recipe, recipeMatchesSeason, Season, WeekPlan } from './types/recipe';
 
 export default function App() {
   const currentSeasonKey = getCurrentSeason();
@@ -242,10 +242,19 @@ export default function App() {
     if (!targetPlan) return;
 
     const currentDay = (targetPlan.days as any)[dayKey] || {};
+    const existingIds = getSlotRecipeIds(currentDay, slot);
+    if (existingIds.length >= MAX_RECIPES_PER_SLOT) {
+      showToast(`Maximum ${MAX_RECIPES_PER_SLOT} recettes par repas atteint.`);
+      setQuickAddToPlanRecipe(null);
+      return;
+    }
+    const nextIds = existingIds.includes(recipe.id) ? existingIds : [...existingIds, recipe.id];
     const updatedDay = {
       ...currentDay,
-      [slot === 'lunch' ? 'lunchRecipeId' : 'dinnerRecipeId']: recipe.id,
-      [slot === 'lunch' ? 'lunchCustomText' : 'dinnerCustomText']: null
+      [slot === 'lunch' ? 'lunchRecipeIds' : 'dinnerRecipeIds']: nextIds,
+      [slot === 'lunch' ? 'lunchRecipeId' : 'dinnerRecipeId']: nextIds[0] || null,
+      [slot === 'lunch' ? 'lunchCustomText' : 'dinnerCustomText']: null,
+      [slot === 'lunch' ? 'lunchIsLeftover' : 'dinnerIsLeftover']: false
     };
 
     const updatedPlan: WeekPlan = {
@@ -432,49 +441,57 @@ export default function App() {
         />
       )}
 
-      {/* Quick Add To Plan Picker Dialog (Only empty days) */}
+      {/* Quick Add To Plan Picker Dialog (Saturday to Friday, up to 4 recipes per slot) */}
       {quickAddToPlanRecipe && (() => {
         const PLAN_DAYS = [
+          { key: 'saturday', label: 'Samedi' },
+          { key: 'sunday', label: 'Dimanche' },
           { key: 'monday', label: 'Lundi' },
           { key: 'tuesday', label: 'Mardi' },
           { key: 'wednesday', label: 'Mercredi' },
           { key: 'thursday', label: 'Jeudi' },
-          { key: 'friday', label: 'Vendredi' },
-          { key: 'saturday', label: 'Samedi' },
-          { key: 'sunday', label: 'Dimanche' }
+          { key: 'friday', label: 'Vendredi' }
         ];
 
         const targetPlan =
           mealPlans.find((p) => p.weekIndex === quickAddWeek) ||
           mealPlans[0] || { days: {} };
 
-        // Collect only slots that do not have a recipe yet
-        const emptySlots: {
+        // Collect slots that still have room (< MAX_RECIPES_PER_SLOT and not custom text)
+        const availableSlots: {
           dayKey: string;
           dayLabel: string;
           slot: 'lunch' | 'dinner';
           slotLabel: string;
           icon: string;
+          currentCount: number;
+          alreadyAdded: boolean;
         }[] = [];
 
         PLAN_DAYS.forEach((d) => {
           const dayData = (targetPlan.days as any)?.[d.key] || {};
-          if (!dayData.lunchRecipeId) {
-            emptySlots.push({
+          const lunchIds = getSlotRecipeIds(dayData, 'lunch');
+          if (!dayData.lunchCustomText && lunchIds.length < MAX_RECIPES_PER_SLOT) {
+            availableSlots.push({
               dayKey: d.key,
               dayLabel: d.label,
               slot: 'lunch',
               slotLabel: 'Midi (Déjeuner)',
-              icon: '☀️'
+              icon: '☀️',
+              currentCount: lunchIds.length,
+              alreadyAdded: lunchIds.includes(quickAddToPlanRecipe.id)
             });
           }
-          if (!dayData.dinnerRecipeId) {
-            emptySlots.push({
+          const dinnerIds = getSlotRecipeIds(dayData, 'dinner');
+          if (!dayData.dinnerCustomText && dinnerIds.length < MAX_RECIPES_PER_SLOT) {
+            availableSlots.push({
               dayKey: d.key,
               dayLabel: d.label,
               slot: 'dinner',
               slotLabel: 'Soir (Dîner)',
-              icon: '🌙'
+              icon: '🌙',
+              currentCount: dinnerIds.length,
+              alreadyAdded: dinnerIds.includes(quickAddToPlanRecipe.id)
             });
           }
         });
@@ -525,27 +542,28 @@ export default function App() {
               </div>
 
               <div className="flex items-center justify-between text-xs text-stone-600">
-                <span>Créneaux libres pour la {quickAddWeek === 1 ? 'Semaine prochaine (+1)' : 'Semaine suivante (+2)'} :</span>
+                <span>Créneaux ouverts ({quickAddWeek === 1 ? 'Semaine +1' : 'Semaine +2'}) :</span>
                 <span className="font-semibold text-orange-800 bg-orange-50 px-2 py-0.5 rounded-md border border-orange-200/60">
-                  {emptySlots.length} disponible{emptySlots.length > 1 ? 's' : ''}
+                  {availableSlots.length} disponible{availableSlots.length > 1 ? 's' : ''}
                 </span>
               </div>
 
-              {/* List of empty slots ONLY */}
+              {/* List of available slots (up to 4 recipes per slot) */}
               <div className="max-h-60 overflow-y-auto space-y-2 text-xs pr-1">
-                {emptySlots.length === 0 ? (
+                {availableSlots.length === 0 ? (
                   <div className="p-4 text-center rounded-2xl bg-stone-50 border border-stone-200 text-stone-600">
                     <p className="font-semibold text-stone-800">
-                      Tous les repas de la {quickAddWeek === 1 ? 'Semaine prochaine (+1)' : 'Semaine suivante (+2)'} sont déjà complétés !
+                      Tous les repas de la {quickAddWeek === 1 ? 'Semaine prochaine (+1)' : 'Semaine suivante (+2)'} sont complets !
                     </p>
                     <p className="mt-1 text-[11px]">
                       Basculez sur la {quickAddWeek === 1 ? 'Semaine suivante (+2)' : 'Semaine prochaine (+1)'} ci-dessus pour planifier ce plat.
                     </p>
                   </div>
                 ) : (
-                  emptySlots.map((item, idx) => (
+                  availableSlots.map((item, idx) => (
                     <button
                       key={idx}
+                      disabled={item.alreadyAdded}
                       onClick={() =>
                         handleQuickAssignToPlan(
                           quickAddToPlanRecipe,
@@ -554,7 +572,11 @@ export default function App() {
                           item.slot
                         )
                       }
-                      className="w-full text-left p-2.5 rounded-xl border border-stone-200 hover:border-orange-500 hover:bg-orange-50 font-medium text-stone-800 transition-colors flex items-center justify-between group"
+                      className={`w-full text-left p-2.5 rounded-xl border font-medium transition-colors flex items-center justify-between group ${
+                        item.alreadyAdded
+                          ? 'border-stone-200 bg-stone-50 text-stone-400 cursor-not-allowed'
+                          : 'border-stone-200 hover:border-orange-500 hover:bg-orange-50 text-stone-800 cursor-pointer'
+                      }`}
                     >
                       <div className="flex items-center gap-2">
                         <span>{item.icon}</span>
@@ -562,9 +584,19 @@ export default function App() {
                           <strong className="font-semibold">{item.dayLabel}</strong> — {item.slotLabel}
                         </span>
                       </div>
-                      <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
-                        Libre +
-                      </span>
+                      {item.alreadyAdded ? (
+                        <span className="text-[11px] font-semibold text-stone-500 bg-stone-200/70 px-2 py-0.5 rounded-md">
+                          Déjà ajoutée
+                        </span>
+                      ) : item.currentCount === 0 ? (
+                        <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+                          Libre +
+                        </span>
+                      ) : (
+                        <span className="text-[11px] font-semibold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200 group-hover:bg-orange-600 group-hover:text-white group-hover:border-orange-600 transition-colors">
+                          {item.currentCount}/{MAX_RECIPES_PER_SLOT} • Ajouter +
+                        </span>
+                      )}
                     </button>
                   ))
                 )}
