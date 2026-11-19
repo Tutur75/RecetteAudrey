@@ -141,3 +141,18 @@ export interface WeekPlan {
 }
 
 export type DayKey = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
+
+export const DEFAULT_RECIPE_IMAGE = `${import.meta.env.BASE_URL || '/'}assets/aistudio/nophoto_20bdedd4.jpg`;
+
+export function isDefaultRecipeImage(url?: string | null): boolean {
+  if (!url || !url.trim()) return true;
+  return url === DEFAULT_RECIPE_IMAGE || url.includes('nophoto_20bdedd4.jpg');
+}
+
+export function getRecipeImageUrl(url?: string | null): string {
+  if (isDefaultRecipeImage(url)) {
+    return DEFAULT_RECIPE_IMAGE;
+  }
+  return url as string;
+}
+

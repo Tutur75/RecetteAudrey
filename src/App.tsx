@@ -26,7 +26,7 @@ import {
   subscribeToMealPlans,
   subscribeToRecipes
 } from './lib/storage';
-import { getSlotRecipeIds, MAX_RECIPES_PER_SLOT, Recipe, recipeMatchesSeason, Season, WeekPlan } from './types/recipe';
+import { DEFAULT_RECIPE_IMAGE, getRecipeImageUrl, getSlotRecipeIds, isDefaultRecipeImage, MAX_RECIPES_PER_SLOT, Recipe, recipeMatchesSeason, Season, WeekPlan } from './types/recipe';
 
 export default function App() {
   const currentSeasonKey = getCurrentSeason();
@@ -501,9 +501,20 @@ export default function App() {
             <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-stone-200 space-y-4">
               <div className="flex items-center gap-3">
                 <img
-                  src={quickAddToPlanRecipe.imageUrl}
+                  src={getRecipeImageUrl(quickAddToPlanRecipe.imageUrl)}
                   alt={quickAddToPlanRecipe.title}
-                  className="w-14 h-14 rounded-xl object-cover shrink-0"
+                  className={`w-14 h-14 rounded-xl shrink-0 ${
+                    isDefaultRecipeImage(quickAddToPlanRecipe.imageUrl)
+                      ? 'object-contain bg-white p-1 border border-stone-200'
+                      : 'object-cover'
+                  }`}
+                  onError={(e) => {
+                    const img = e.target as HTMLImageElement;
+                    if (!img.src.includes('nophoto_20bdedd4.jpg')) {
+                      img.src = DEFAULT_RECIPE_IMAGE;
+                      img.className = 'w-14 h-14 rounded-xl shrink-0 object-contain bg-white p-1 border border-stone-200';
+                    }
+                  }}
                 />
                 <div>
                   <span className="text-xs font-semibold text-orange-700 uppercase tracking-wider block">

@@ -17,8 +17,11 @@ import React, { useState } from 'react';
 import { SEASONS } from '../lib/seasons';
 import {
   CATEGORY_METADATA,
+  DEFAULT_RECIPE_IMAGE,
   formatServings,
+  getRecipeImageUrl,
   getRecipeSeasons,
+  isDefaultRecipeImage,
   normalizeIngredientCategory,
   parseBaseServings,
   Recipe
@@ -95,9 +98,18 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
           {/* Header Image with Season Badge */}
           <div className="relative h-64 sm:h-80 w-full bg-stone-100">
             <img
-              src={recipe.imageUrl || 'https://images.unsplash.com/photo-1495521821757-a1efb6729352?auto=format&fit=crop&w=1200&q=80'}
+              src={getRecipeImageUrl(recipe.imageUrl)}
               alt={recipe.title}
-              className="w-full h-full object-cover"
+              className={`w-full h-full ${
+                isDefaultRecipeImage(recipe.imageUrl) ? 'object-contain bg-white p-8' : 'object-cover'
+              }`}
+              onError={(e) => {
+                const img = e.target as HTMLImageElement;
+                if (!img.src.includes('nophoto_20bdedd4.jpg')) {
+                  img.src = DEFAULT_RECIPE_IMAGE;
+                  img.className = 'w-full h-full object-contain bg-white p-8';
+                }
+              }}
             />
             <div className="absolute inset-0 bg-gradient-to-t from-stone-950/80 via-stone-950/30 to-transparent" />
 

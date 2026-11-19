@@ -1,7 +1,7 @@
 import { CalendarPlus, ChefHat, Clock, Edit3, Flame, Heart, Lightbulb, Sparkles, Users } from 'lucide-react';
 import React from 'react';
 import { SEASONS } from '../lib/seasons';
-import { formatServings, getRecipeSeasons, Recipe } from '../types/recipe';
+import { DEFAULT_RECIPE_IMAGE, formatServings, getRecipeImageUrl, getRecipeSeasons, isDefaultRecipeImage, Recipe } from '../types/recipe';
 
 interface RecipeCardProps {
   recipe: Recipe;
@@ -26,17 +26,23 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({
 
   return (
     <article className="group bg-white rounded-2xl border border-stone-200/90 hover:border-orange-300 shadow-xs hover:shadow-xl transition-all duration-300 flex flex-col overflow-hidden">
-      {/* High Definition Image Container */}
+      {/* Image Container */}
       <div className="relative aspect-4/3 w-full overflow-hidden bg-stone-100">
         <img
-          src={recipe.imageUrl || 'https://images.unsplash.com/photo-1495521821757-a1efb6729352?auto=format&fit=crop&w=800&q=80'}
+          src={getRecipeImageUrl(recipe.imageUrl)}
           alt={recipe.title}
           loading="lazy"
-          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
+          className={`w-full h-full transition-transform duration-500 ease-out ${
+            isDefaultRecipeImage(recipe.imageUrl)
+              ? 'object-contain bg-white p-6 group-hover:scale-105'
+              : 'object-cover group-hover:scale-105'
+          }`}
           onError={(e) => {
-            // Graceful fallback image if user uploaded invalid URL
-            (e.target as HTMLImageElement).src =
-              'https://images.unsplash.com/photo-1495521821757-a1efb6729352?auto=format&fit=crop&w=800&q=80';
+            const img = e.target as HTMLImageElement;
+            if (!img.src.includes('nophoto_20bdedd4.jpg')) {
+              img.src = DEFAULT_RECIPE_IMAGE;
+              img.className = 'w-full h-full object-contain bg-white p-6 group-hover:scale-105 transition-transform duration-500 ease-out';
+            }
           }}
         />
 

@@ -3,10 +3,8 @@ import {
   Camera,
   Check,
   ChevronDown,
-  ImageIcon,
   Link,
   Plus,
-  Sparkles,
   Trash2,
   Upload,
   X
@@ -16,9 +14,12 @@ import { SEASONS } from '../lib/seasons';
 import { optimizeImageFile } from '../lib/storage';
 import {
   CATEGORY_METADATA,
+  DEFAULT_RECIPE_IMAGE,
+  getRecipeImageUrl,
   INGREDIENT_CATEGORIES,
   INGREDIENT_UNITS,
   Ingredient,
+  isDefaultRecipeImage,
   normalizeIngredientCategory,
   Recipe,
   Season
@@ -32,19 +33,6 @@ interface RecipeFormModalProps {
   onDelete?: (recipeId: string) => Promise<void>;
   onClose: () => void;
 }
-
-const CURATED_FOOD_PHOTOS = [
-  { label: 'Risotto asperges', url: 'https://images.unsplash.com/photo-1633964913295-ceb43826e7c9?auto=format&fit=crop&w=1200&q=80' },
-  { label: 'Velouté potimarron', url: 'https://images.unsplash.com/photo-1547592166-23ac45744acd?auto=format&fit=crop&w=1200&q=80' },
-  { label: 'Bœuf bourguignon', url: 'https://images.unsplash.com/photo-1534939561126-855b8675edd7?auto=format&fit=crop&w=1200&q=80' },
-  { label: 'Ratatouille', url: 'https://images.unsplash.com/photo-1572441713132-c542fc4fe282?auto=format&fit=crop&w=1200&q=80' },
-  { label: 'Saumon croustillant', url: 'https://images.unsplash.com/photo-1467003909585-2f8a72700288?auto=format&fit=crop&w=1200&q=80' },
-  { label: 'Tarte aux fraises', url: 'https://images.unsplash.com/photo-1565958011703-44f9829ba187?auto=format&fit=crop&w=1200&q=80' },
-  { label: 'Tarte Tatin', url: 'https://images.unsplash.com/photo-1519915028121-7d3463d20b13?auto=format&fit=crop&w=1200&q=80' },
-  { label: 'Gratin dauphinois', url: 'https://images.unsplash.com/photo-1588166524941-3bf61a9c41db?auto=format&fit=crop&w=1200&q=80' },
-  { label: 'Brochettes grillées', url: 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&w=1200&q=80' },
-  { label: 'Salade fraîcheur', url: 'https://images.unsplash.com/photo-1592417817098-8f3d6ef23a88?auto=format&fit=crop&w=1200&q=80' }
-];
 
 export const RecipeFormModal: React.FC<RecipeFormModalProps> = ({
   recipe,
@@ -99,7 +87,7 @@ export const RecipeFormModal: React.FC<RecipeFormModalProps> = ({
     recipe?.servings !== undefined && recipe?.servings !== null ? String(recipe.servings) : '4,25 Pers'
   );
   const [difficulty, setDifficulty] = useState<'Facile' | 'Moyen' | 'Difficile'>(recipe?.difficulty || 'Facile');
-  const [imageUrl, setImageUrl] = useState(recipe?.imageUrl || CURATED_FOOD_PHOTOS[0].url);
+  const [imageUrl, setImageUrl] = useState(recipe?.imageUrl || DEFAULT_RECIPE_IMAGE);
   const [notes, setNotes] = useState(recipe?.notes || '');
   
   // Tags state & dynamic pool derived strictly from recipes in the notebook
@@ -150,7 +138,6 @@ export const RecipeFormModal: React.FC<RecipeFormModalProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [showGallery, setShowGallery] = useState(false);
 
   // Photo upload handler
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -290,7 +277,7 @@ export const RecipeFormModal: React.FC<RecipeFormModalProps> = ({
         ingredients: filteredIngredients,
         instructions: filteredSteps,
         notes: notes.trim(),
-        imageUrl: imageUrl || CURATED_FOOD_PHOTOS[0].url,
+        imageUrl: imageUrl.trim() || DEFAULT_RECIPE_IMAGE,
         rating: recipe?.rating || 5,
         createdAt: recipe?.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString()
@@ -316,7 +303,7 @@ export const RecipeFormModal: React.FC<RecipeFormModalProps> = ({
               {isEditing ? 'Modifier la recette' : 'Créer une nouvelle recette'}
             </h2>
             <p className="text-xs text-stone-700">
-              Édition complète : ingrédients, saisons, astuces d&apos;Audrey et photo HD
+              Édition complète : ingrédients, saisons, astuces d&apos;Audrey et photo
             </p>
           </div>
           <button
@@ -449,32 +436,38 @@ export const RecipeFormModal: React.FC<RecipeFormModalProps> = ({
 
           {/* Photo Management Section */}
           <div className="p-5 rounded-2xl bg-stone-50 border border-stone-200/90 space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <label className="text-xs font-semibold uppercase tracking-wider text-stone-700 flex items-center gap-1.5">
                 <Camera className="w-4 h-4 text-orange-600" />
-                Photo haute définition du plat
+                Photo du plat
               </label>
-              <button
-                type="button"
-                onClick={() => setShowGallery(!showGallery)}
-                className="text-xs font-medium text-orange-700 hover:text-orange-800 underline flex items-center gap-1"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                {showGallery ? 'Masquer la galerie' : 'Choisir dans la galerie culinaire HD'}
-              </button>
+              {!isDefaultRecipeImage(imageUrl) && (
+                <button
+                  type="button"
+                  onClick={() => setImageUrl(DEFAULT_RECIPE_IMAGE)}
+                  className="text-xs font-medium text-stone-600 hover:text-rose-600 underline cursor-pointer"
+                >
+                  Remettre la photo par défaut
+                </button>
+              )}
             </div>
 
             {/* Photo preview and actions */}
             <div className="flex flex-col sm:flex-row gap-5 items-start">
-              <div className="relative w-full sm:w-48 h-36 rounded-xl overflow-hidden bg-stone-200 shrink-0 border border-stone-300 shadow-xs">
-                {imageUrl ? (
-                  <img src={imageUrl} alt="Aperçu" className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full flex flex-col items-center justify-center text-stone-400">
-                    <ImageIcon className="w-8 h-8" />
-                    <span className="text-xs mt-1">Aucune photo</span>
-                  </div>
-                )}
+              <div className="relative w-full sm:w-48 h-36 rounded-xl overflow-hidden bg-white shrink-0 border border-stone-300 shadow-xs">
+                <img
+                  src={getRecipeImageUrl(imageUrl)}
+                  alt="Aperçu"
+                  className={`w-full h-full ${
+                    isDefaultRecipeImage(imageUrl) ? 'object-contain p-3 bg-white' : 'object-cover'
+                  }`}
+                  onError={(e) => {
+                    const img = e.target as HTMLImageElement;
+                    if (!img.src.includes('nophoto_20bdedd4.jpg')) {
+                      img.src = DEFAULT_RECIPE_IMAGE;
+                    }
+                  }}
+                />
                 {isCompressingPhoto && (
                   <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-white text-xs font-medium">
                     Optimisation...
@@ -496,13 +489,13 @@ export const RecipeFormModal: React.FC<RecipeFormModalProps> = ({
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isCompressingPhoto}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-white hover:bg-stone-100 text-stone-800 border border-stone-300 shadow-2xs transition-colors"
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-white hover:bg-stone-100 text-stone-800 border border-stone-300 shadow-2xs transition-colors cursor-pointer"
                   >
                     <Upload className="w-4 h-4 text-orange-600" />
                     <span>Importer une photo depuis l’ordinateur / mobile</span>
                   </button>
                   <p className="text-[11px] text-stone-700 mt-1">
-                    Format JPG, PNG, WebP. L’image est automatiquement optimisée en haute définition.
+                    Format JPG, PNG, WebP. Sans photo importée, l’image par défaut est utilisée.
                   </p>
                 </div>
 
@@ -513,44 +506,15 @@ export const RecipeFormModal: React.FC<RecipeFormModalProps> = ({
                     <span className="text-xs text-stone-700 font-medium">Ou URL d’image web :</span>
                   </div>
                   <input
-                    type="url"
-                    value={imageUrl}
+                    type="text"
+                    value={isDefaultRecipeImage(imageUrl) ? '' : imageUrl}
                     onChange={(e) => setImageUrl(e.target.value)}
-                    placeholder="https://images.unsplash.com/..."
+                    placeholder="https://..."
                     className="w-full mt-1 px-3 py-1.5 rounded-lg border border-stone-300 text-xs text-stone-800 bg-white"
                   />
                 </div>
               </div>
             </div>
-
-            {/* Curated Gallery Picker Drawer */}
-            {showGallery && (
-              <div className="pt-3 border-t border-stone-200">
-                <span className="text-xs font-semibold text-stone-700 block mb-2">
-                  Galerie de photos gastronomiques sélectionnées :
-                </span>
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
-                  {CURATED_FOOD_PHOTOS.map((item) => (
-                    <button
-                      type="button"
-                      key={item.label}
-                      onClick={() => {
-                        setImageUrl(item.url);
-                        setShowGallery(false);
-                      }}
-                      className={`relative aspect-4/3 rounded-lg overflow-hidden border-2 transition-all group ${
-                        imageUrl === item.url ? 'border-orange-600 ring-2 ring-orange-500/30' : 'border-transparent hover:border-stone-400'
-                      }`}
-                    >
-                      <img src={item.url} alt={item.label} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                      <span className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[10px] p-1 truncate text-center">
-                        {item.label}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Metrics: Prep time, cook time, servings, difficulty */}

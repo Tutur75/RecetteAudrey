@@ -18,7 +18,7 @@ import {
 import React, { useState } from 'react';
 import { INITIAL_MEAL_PLANS } from '../data/seedRecipes';
 import { getUpcomingWeekDates } from '../lib/dates';
-import { DayKey, formatServings, getSlotRecipeIds, MAX_RECIPES_PER_SLOT, Recipe, recipeMatchesSeason, Season, WeekPlan } from '../types/recipe';
+import { DayKey, DEFAULT_RECIPE_IMAGE, formatServings, getRecipeImageUrl, getSlotRecipeIds, isDefaultRecipeImage, MAX_RECIPES_PER_SLOT, Recipe, recipeMatchesSeason, Season, WeekPlan } from '../types/recipe';
 import { ShoppingListModal } from './ShoppingListModal';
 
 interface MealPlannerProps {
@@ -713,9 +713,20 @@ export const MealPlanner: React.FC<MealPlannerProps> = ({
                             {/* Photo on top (smaller when multiple recipes) */}
                             <div className={`relative w-full ${lunchImageHeight} rounded-lg overflow-hidden bg-stone-200 mb-1 transition-all`}>
                               <img
-                                src={lunchRecipe.imageUrl}
+                                src={getRecipeImageUrl(lunchRecipe.imageUrl)}
                                 alt={lunchRecipe.title}
-                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                className={`w-full h-full transition-transform duration-300 ${
+                                  isDefaultRecipeImage(lunchRecipe.imageUrl)
+                                    ? 'object-contain bg-white p-1 group-hover:scale-105'
+                                    : 'object-cover group-hover:scale-105'
+                                }`}
+                                onError={(e) => {
+                                  const img = e.target as HTMLImageElement;
+                                  if (!img.src.includes('nophoto_20bdedd4.jpg')) {
+                                    img.src = DEFAULT_RECIPE_IMAGE;
+                                    img.className = 'w-full h-full object-contain bg-white p-1 group-hover:scale-105 transition-transform duration-300';
+                                  }
+                                }}
                               />
                               <div className="absolute top-1 left-1 flex items-center gap-1">
                                 {dayPlan.lunchIsLeftover && idx === 0 && (
@@ -892,9 +903,20 @@ export const MealPlanner: React.FC<MealPlannerProps> = ({
                             {/* Photo on top (smaller when multiple recipes) */}
                             <div className={`relative w-full ${dinnerImageHeight} rounded-lg overflow-hidden bg-stone-200 mb-1 transition-all`}>
                               <img
-                                src={dinnerRecipe.imageUrl}
+                                src={getRecipeImageUrl(dinnerRecipe.imageUrl)}
                                 alt={dinnerRecipe.title}
-                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                className={`w-full h-full transition-transform duration-300 ${
+                                  isDefaultRecipeImage(dinnerRecipe.imageUrl)
+                                    ? 'object-contain bg-white p-1 group-hover:scale-105'
+                                    : 'object-cover group-hover:scale-105'
+                                }`}
+                                onError={(e) => {
+                                  const img = e.target as HTMLImageElement;
+                                  if (!img.src.includes('nophoto_20bdedd4.jpg')) {
+                                    img.src = DEFAULT_RECIPE_IMAGE;
+                                    img.className = 'w-full h-full object-contain bg-white p-1 group-hover:scale-105 transition-transform duration-300';
+                                  }
+                                }}
                               />
                               <div className="absolute top-1 right-1 flex items-center gap-1">
                                 <span className="bg-black/40 text-white p-0.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1410,9 +1432,18 @@ export const MealPlanner: React.FC<MealPlannerProps> = ({
                       >
                         <div className="flex items-center gap-3 min-w-0">
                           <img
-                            src={r.imageUrl}
+                            src={getRecipeImageUrl(r.imageUrl)}
                             alt={r.title}
-                            className="w-14 h-14 rounded-xl object-cover shrink-0"
+                            className={`w-14 h-14 rounded-xl shrink-0 ${
+                              isDefaultRecipeImage(r.imageUrl) ? 'object-contain bg-white p-1 border border-stone-200' : 'object-cover'
+                            }`}
+                            onError={(e) => {
+                              const img = e.target as HTMLImageElement;
+                              if (!img.src.includes('nophoto_20bdedd4.jpg')) {
+                                img.src = DEFAULT_RECIPE_IMAGE;
+                                img.className = 'w-14 h-14 rounded-xl shrink-0 object-contain bg-white p-1 border border-stone-200';
+                              }
+                            }}
                           />
                           <div className="min-w-0">
                             <h4 className="font-bold text-stone-900 text-sm">
