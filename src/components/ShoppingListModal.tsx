@@ -1,4 +1,4 @@
-import { CheckSquare, Copy, Search, ShoppingCart, Square, X } from 'lucide-react';
+import { ArrowDownAZ, CheckSquare, Copy, Layers, Search, ShoppingCart, Square, X } from 'lucide-react';
 import React, { useMemo, useState } from 'react';
 import {
   CATEGORY_METADATA,
@@ -17,6 +17,13 @@ interface ShoppingListModalProps {
   onClose: () => void;
 }
 
+interface IngredientSource {
+  recipeTitle: string;
+  amount: string;
+  unit: string;
+  occurrences: number;
+}
+
 interface ConsolidatedItem {
   id: string;
   name: string;
@@ -24,6 +31,7 @@ interface ConsolidatedItem {
   unit: string;
   category: IngredientCategory;
   recipesCount: number;
+  sources: IngredientSource[];
 }
 
 export const ShoppingListModal: React.FC<ShoppingListModalProps> = ({
@@ -34,6 +42,8 @@ export const ShoppingListModal: React.FC<ShoppingListModalProps> = ({
   const [checkedItems, setCheckedItems] = useState<Record<string, boolean>>({});
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<IngredientCategory | 'all'>('all');
+  const [viewMode, setViewMode] = useState<'category' | 'alpha'>('category');
+  const [hoveredItemId, setHoveredItemId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   const recipeMap = useMemo(() => {
@@ -65,7 +75,7 @@ export const ShoppingListModal: React.FC<ShoppingListModalProps> = ({
     return list;
   }, [plans, recipeMap]);
 
-  // Group and consolidate ingredients by the 11 standardized Bring categories & name
+  // Group and consolidate ingredients by the 11 standardized Bring categories & sort alphabetically
   const categorizedItems = useMemo(() => {
     const consolidatedMap = new Map<string, ConsolidatedItem>();
 
@@ -76,19 +86,44 @@ export const ShoppingListModal: React.FC<ShoppingListModalProps> = ({
         const existing = consolidatedMap.get(key);
         const numAmount = parseFloat(ing.amount.replace(',', '.'));
 
-        if (existing && !isNaN(numAmount)) {
-          const currentNum = parseFloat(existing.amount.replace(',', '.'));
-          const newTotal = (isNaN(currentNum) ? 0 : currentNum) + numAmount;
-          existing.amount = Number.isInteger(newTotal) ? newTotal.toString() : newTotal.toFixed(1).replace('.0', '');
+        if (existing) {
+          if (!isNaN(numAmount)) {
+            const currentNum = parseFloat(existing.amount.replace(',', '.'));
+            const newTotal = (isNaN(currentNum) ? 0 : currentNum) + numAmount;
+            existing.amount = Number.isInteger(newTotal)
+              ? newTotal.toString()
+              : newTotal.toFixed(1).replace('.0', '');
+          }
           existing.recipesCount += 1;
-        } else if (!existing) {
+          const existingSource = existing.sources.find(
+            (s) => s.recipeTitle === recipe.title && s.amount === ing.amount && s.unit === (ing.unit || '')
+          );
+          if (existingSource) {
+            existingSource.occurrences += 1;
+          } else {
+            existing.sources.push({
+              recipeTitle: recipe.title,
+              amount: ing.amount,
+              unit: ing.unit || '',
+              occurrences: 1
+            });
+          }
+        } else {
           consolidatedMap.set(key, {
             id: key,
             name: ing.name,
             amount: ing.amount,
             unit: ing.unit || '',
             category: normCategory,
-            recipesCount: 1
+            recipesCount: 1,
+            sources: [
+              {
+                recipeTitle: recipe.title,
+                amount: ing.amount,
+                unit: ing.unit || '',
+                occurrences: 1
+              }
+            ]
           });
         }
       });
@@ -98,16 +133,34 @@ export const ShoppingListModal: React.FC<ShoppingListModalProps> = ({
     const grouped = {} as Record<IngredientCategory, ConsolidatedItem[]>;
 
     INGREDIENT_CATEGORIES.forEach((cat) => {
-      grouped[cat] = allItems.filter((i) => i.category === cat);
+      grouped[cat] = allItems
+        .filter((i) => i.category === cat)
+        .sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
     });
 
     return grouped;
   }, [plannedRecipes]);
 
-  // Total list of all consolidated ingredients
+  // Total list of all consolidated ingredients sorted alphabetically
   const allItemsList = useMemo(() => {
-    return Object.values(categorizedItems).flat();
+    return Object.values(categorizedItems)
+      .flat()
+      .sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
   }, [categorizedItems]);
+
+  // Flat alphabetical filtered list (respects both searchQuery and selectedCategoryFilter)
+  const filteredAllAlphaItems = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    return allItemsList.filter((item) => {
+      if (selectedCategoryFilter !== 'all' && item.category !== selectedCategoryFilter) {
+        return false;
+      }
+      if (q && !item.name.toLowerCase().includes(q)) {
+        return false;
+      }
+      return true;
+    });
+  }, [allItemsList, searchQuery, selectedCategoryFilter]);
 
   // Filter items by search query
   const filteredCategorizedItems = useMemo(() => {
@@ -212,8 +265,38 @@ export const ShoppingListModal: React.FC<ShoppingListModalProps> = ({
             )}
           </div>
 
-          {/* Action Toolbar: Progression & Bring Copy Button */}
-          <div className="flex items-center justify-between sm:justify-end gap-2.5">
+          {/* Action Toolbar: View toggle, Progression & Bring Copy Button */}
+          <div className="flex items-center justify-between sm:justify-end gap-2 flex-wrap">
+            {/* View Mode Toggle: By Category (sorted A-Z) vs Global A-Z */}
+            <div className="inline-flex rounded-xl bg-stone-100 p-0.5 border border-stone-200/80">
+              <button
+                type="button"
+                onClick={() => setViewMode('category')}
+                className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
+                  viewMode === 'category'
+                    ? 'bg-white text-stone-900 shadow-2xs'
+                    : 'text-stone-600 hover:text-stone-900'
+                }`}
+                title="Afficher par rayon (triés A–Z dans chaque rayon)"
+              >
+                <Layers className="w-3 h-3" />
+                <span>Rayons</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('alpha')}
+                className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
+                  viewMode === 'alpha'
+                    ? 'bg-white text-stone-900 shadow-2xs'
+                    : 'text-stone-600 hover:text-stone-900'
+                }`}
+                title="Tout afficher par ordre alphabétique (idéal pour repérer les doublons)"
+              >
+                <ArrowDownAZ className="w-3.5 h-3.5" />
+                <span>A–Z</span>
+              </button>
+            </div>
+
             <span className="text-xs text-stone-600 font-medium whitespace-nowrap">
               <strong>{checkedCount}</strong> / {totalIngredientsCount} cochés
             </span>
@@ -314,6 +397,103 @@ export const ShoppingListModal: React.FC<ShoppingListModalProps> = ({
                 Réinitialiser la recherche
               </button>
             </div>
+          ) : viewMode === 'alpha' ? (
+            filteredAllAlphaItems.length === 0 ? (
+              <div className="py-10 text-center text-stone-600 text-sm">
+                Aucun ingrédient dans cette sélection.
+              </div>
+            ) : (
+              <div className="space-y-2 bg-stone-50/60 p-4 rounded-2xl border border-stone-200/80">
+                <div className="flex items-center justify-between pb-2 border-b border-stone-200">
+                  <div className="flex items-center gap-2">
+                    <ArrowDownAZ className="w-4 h-4 text-orange-700" />
+                    <h4 className="font-bold text-sm text-stone-900 tracking-wide">
+                      Liste alphabétique globale (A → Z)
+                    </h4>
+                    <span className="text-[11px] px-2 py-0.5 rounded-full font-semibold border bg-white text-stone-700 border-stone-200">
+                      {filteredAllAlphaItems.length} articles
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-stone-500 hidden sm:inline">
+                    Survolez un ingrédient pour voir sa recette d&apos;origine
+                  </span>
+                </div>
+
+                <ul className="divide-y divide-stone-200/60 bg-white rounded-xl border border-stone-200/70 shadow-2xs">
+                  {filteredAllAlphaItems.map((item, idx) => {
+                    const isChecked = !!checkedItems[item.id];
+                    const meta = CATEGORY_METADATA[item.category];
+                    const isHovered = hoveredItemId === `alpha-${item.id}`;
+                    const tooltipText = item.sources
+                      .map((s) => {
+                        const qty = [s.amount, s.unit].filter(Boolean).join(' ');
+                        const times = s.occurrences > 1 ? ` ×${s.occurrences}` : '';
+                        return `${s.recipeTitle}${times}${qty ? ` (${qty})` : ''}`;
+                      })
+                      .join(' • ');
+
+                    return (
+                      <li
+                        key={item.id}
+                        onClick={() => toggleCheck(item.id)}
+                        onMouseEnter={() => setHoveredItemId(`alpha-${item.id}`)}
+                        onMouseLeave={() => setHoveredItemId(null)}
+                        title={`Recette(s) : ${tooltipText}`}
+                        className={`relative first:rounded-t-xl last:rounded-b-xl flex items-center justify-between gap-2 py-2.5 px-3 cursor-pointer transition-colors ${
+                          isChecked
+                            ? 'bg-emerald-50/60 text-stone-400 line-through'
+                            : 'hover:bg-amber-50/50 text-stone-800'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          {isChecked ? (
+                            <CheckSquare className="w-4 h-4 text-emerald-600 shrink-0" />
+                          ) : (
+                            <Square className="w-4 h-4 text-stone-400 shrink-0" />
+                          )}
+                          <span className="text-sm font-medium truncate">{item.name}</span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-stone-100 text-stone-600 border border-stone-200/70 shrink-0 hidden sm:inline-flex items-center gap-1">
+                            <span>{meta.emoji}</span>
+                            <span className="truncate max-w-[120px]">{item.category}</span>
+                          </span>
+                        </div>
+                        <span className="text-xs font-mono font-semibold text-stone-700 bg-stone-100 px-2 py-0.5 rounded-md shrink-0">
+                          {item.amount} {item.unit}
+                        </span>
+
+                        {/* Hover Provenance Tooltip */}
+                        {isHovered && item.sources.length > 0 && (
+                          <div
+                            className={`pointer-events-none absolute left-9 z-30 max-w-xs sm:max-w-sm rounded-xl bg-stone-900 text-white px-3 py-2 shadow-xl border border-stone-700 text-xs ${
+                              idx === 0 ? 'top-full mt-1' : 'bottom-full mb-1'
+                            }`}
+                          >
+                            <div className="text-[10px] font-semibold uppercase tracking-wider text-amber-300 mb-1">
+                              Provient de :
+                            </div>
+                            <ul className="space-y-0.5">
+                              {item.sources.map((src, sIdx) => (
+                                <li key={sIdx} className="flex items-center justify-between gap-3">
+                                  <span className="font-medium text-stone-100">
+                                    • {src.recipeTitle}
+                                    {src.occurrences > 1 ? ` (×${src.occurrences})` : ''}
+                                  </span>
+                                  {(src.amount || src.unit) && (
+                                    <span className="text-[11px] font-mono text-stone-300 shrink-0">
+                                      {src.amount} {src.unit}
+                                    </span>
+                                  )}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )
           ) : (
             INGREDIENT_CATEGORIES.map((catName) => {
               if (selectedCategoryFilter !== 'all' && selectedCategoryFilter !== catName) return null;
@@ -341,30 +521,70 @@ export const ShoppingListModal: React.FC<ShoppingListModalProps> = ({
                     )}
                   </div>
 
-                  <ul className="divide-y divide-stone-200/60 bg-white rounded-xl border border-stone-200/70 overflow-hidden shadow-2xs">
-                    {items.map((item) => {
+                  <ul className="divide-y divide-stone-200/60 bg-white rounded-xl border border-stone-200/70 shadow-2xs">
+                    {items.map((item, idx) => {
                       const isChecked = !!checkedItems[item.id];
+                      const isHovered = hoveredItemId === `cat-${item.id}`;
+                      const tooltipText = item.sources
+                        .map((s) => {
+                          const qty = [s.amount, s.unit].filter(Boolean).join(' ');
+                          const times = s.occurrences > 1 ? ` ×${s.occurrences}` : '';
+                          return `${s.recipeTitle}${times}${qty ? ` (${qty})` : ''}`;
+                        })
+                        .join(' • ');
+
                       return (
                         <li
                           key={item.id}
                           onClick={() => toggleCheck(item.id)}
-                          className={`flex items-center justify-between py-2.5 px-3 cursor-pointer transition-colors ${
+                          onMouseEnter={() => setHoveredItemId(`cat-${item.id}`)}
+                          onMouseLeave={() => setHoveredItemId(null)}
+                          title={`Recette(s) : ${tooltipText}`}
+                          className={`relative first:rounded-t-xl last:rounded-b-xl flex items-center justify-between py-2.5 px-3 cursor-pointer transition-colors ${
                             isChecked
                               ? 'bg-emerald-50/60 text-stone-400 line-through'
-                              : 'hover:bg-amber-50/40 text-stone-800'
+                              : 'hover:bg-amber-50/50 text-stone-800'
                           }`}
                         >
-                          <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-3 min-w-0">
                             {isChecked ? (
                               <CheckSquare className="w-4 h-4 text-emerald-600 shrink-0" />
                             ) : (
                               <Square className="w-4 h-4 text-stone-400 shrink-0" />
                             )}
-                            <span className="text-sm font-medium">{item.name}</span>
+                            <span className="text-sm font-medium truncate">{item.name}</span>
                           </div>
                           <span className="text-xs font-mono font-semibold text-stone-700 bg-stone-100 px-2 py-0.5 rounded-md shrink-0">
                             {item.amount} {item.unit}
                           </span>
+
+                          {/* Hover Provenance Tooltip */}
+                          {isHovered && item.sources.length > 0 && (
+                            <div
+                              className={`pointer-events-none absolute left-9 z-30 max-w-xs sm:max-w-sm rounded-xl bg-stone-900 text-white px-3 py-2 shadow-xl border border-stone-700 text-xs ${
+                                idx === 0 ? 'top-full mt-1' : 'bottom-full mb-1'
+                              }`}
+                            >
+                              <div className="text-[10px] font-semibold uppercase tracking-wider text-amber-300 mb-1">
+                                Provient de :
+                              </div>
+                              <ul className="space-y-0.5">
+                                {item.sources.map((src, sIdx) => (
+                                  <li key={sIdx} className="flex items-center justify-between gap-3">
+                                    <span className="font-medium text-stone-100">
+                                      • {src.recipeTitle}
+                                      {src.occurrences > 1 ? ` (×${src.occurrences})` : ''}
+                                    </span>
+                                    {(src.amount || src.unit) && (
+                                      <span className="text-[11px] font-mono text-stone-300 shrink-0">
+                                        {src.amount} {src.unit}
+                                      </span>
+                                    )}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
                         </li>
                       );
                     })}
@@ -377,7 +597,7 @@ export const ShoppingListModal: React.FC<ShoppingListModalProps> = ({
 
         {/* Footer */}
         <div className="px-6 py-3.5 border-t border-stone-200 bg-stone-50/80 flex items-center justify-between gap-3 text-xs text-stone-500">
-          <span>Format compatible Bring! avec catégories</span>
+          <span>Tri alphabétique A–Z • Survolez un ingrédient pour voir la recette source</span>
           <button
             onClick={onClose}
             className="px-4 py-2 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-xs font-semibold cursor-pointer"
