@@ -6,6 +6,8 @@ import {
   Filter,
   Plus,
   RotateCcw,
+  Salad,
+  Search,
   Sparkles,
   UtensilsCrossed
 } from 'lucide-react';
@@ -17,6 +19,7 @@ import { RecipeDetailModal } from './components/RecipeDetailModal';
 import { RecipeFormModal } from './components/RecipeFormModal';
 import { SearchBar } from './components/SearchBar';
 import { SeasonTabs } from './components/SeasonTabs';
+import { SideFormModal } from './components/SideFormModal';
 import { TagManagerModal } from './components/TagManagerModal';
 import { getCurrentSeason, SEASONS } from './lib/seasons';
 import {
@@ -31,8 +34,8 @@ import { DEFAULT_RECIPE_IMAGE, getRecipeImageUrl, getSlotRecipeIds, isDefaultRec
 export default function App() {
   const currentSeasonKey = getCurrentSeason();
 
-  // Navigation state: default to current season (Automne in November)
-  const [activeTab, setActiveTab] = useState<Season | 'all' | 'planner'>(currentSeasonKey);
+  // Navigation state: default to current season
+  const [activeTab, setActiveTab] = useState<Season | 'all' | 'sides' | 'planner'>(currentSeasonKey);
 
   // Data state
   const [recipes, setRecipes] = useState<Recipe[]>([]);
@@ -42,12 +45,16 @@ export default function App() {
 
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('');
+  const [sideSearchQuery, setSideSearchQuery] = useState('');
   const [maxPrepTime, setMaxPrepTime] = useState<number | null>(null);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
   // Modals state
   const [viewingRecipe, setViewingRecipe] = useState<Recipe | null>(null);
   const [editingRecipe, setEditingRecipe] = useState<Recipe | null | 'new'>(null);
+  const [duplicatingRecipe, setDuplicatingRecipe] = useState<Recipe | null>(null);
+  const [editingSide, setEditingSide] = useState<Recipe | null | 'new'>(null);
+  const [duplicatingSide, setDuplicatingSide] = useState<Recipe | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isTagManagerOpen, setIsTagManagerOpen] = useState(false);
 
@@ -79,22 +86,26 @@ export default function App() {
     };
   }, []);
 
-  // Compute available tags strictly from all recipes currently saved (auto-purges unused tags)
+  // Separate main seasonal recipes from Accompagnements
+  const mainRecipes = useMemo(() => recipes.filter((r) => !r.isSide), [recipes]);
+  const sideRecipes = useMemo(() => recipes.filter((r) => !!r.isSide), [recipes]);
+
+  // Compute available tags strictly from main recipes currently saved (auto-purges unused tags)
   const availableTags = useMemo(() => {
     const tagSet = new Set<string>();
-    recipes.forEach((r) => {
+    mainRecipes.forEach((r) => {
       r.tags?.forEach((t) => {
         const cleaned = t.trim().replace(/^#/, '');
         if (cleaned) tagSet.add(cleaned);
       });
     });
     return Array.from(tagSet).sort((a, b) => a.localeCompare(b, 'fr'));
-  }, [recipes]);
+  }, [mainRecipes]);
 
   // Compute recipe counts per tag
   const tagCounts = useMemo(() => {
     const counts: Record<string, number> = {};
-    recipes.forEach((r) => {
+    mainRecipes.forEach((r) => {
       const seen = new Set<string>();
       r.tags?.forEach((t) => {
         const cleaned = t.trim().replace(/^#/, '');
@@ -105,7 +116,7 @@ export default function App() {
       });
     });
     return counts;
-  }, [recipes]);
+  }, [mainRecipes]);
 
   // Delete a tag from all recipes in the notebook (which auto-purges it completely)
   const handleDeleteTagGlobally = async (tagToDelete: string) => {
@@ -156,11 +167,11 @@ export default function App() {
     setSelectedTags([]);
   };
 
-  // Filter recipes based on active season, search query, prep time, tags
+  // Filter main recipes based on active season, search query, prep time, tags
   const filteredRecipes = useMemo(() => {
-    if (activeTab === 'planner') return [];
+    if (activeTab === 'planner' || activeTab === 'sides') return [];
 
-    return recipes.filter((r) => {
+    return mainRecipes.filter((r) => {
       // 1. Season filter (skip if 'all' is selected)
       if (activeTab !== 'all' && !recipeMatchesSeason(r, activeTab)) return false;
 
@@ -190,32 +201,80 @@ export default function App() {
 
       return true;
     });
-  }, [recipes, activeTab, searchQuery, maxPrepTime, selectedTags]);
+  }, [mainRecipes, activeTab, searchQuery, maxPrepTime, selectedTags]);
 
-  // Handle Save Recipe
+  // Filter Accompagnements
+  const filteredSides = useMemo(() => {
+    if (activeTab !== 'sides') return [];
+    const q = sideSearchQuery.toLowerCase().trim();
+    if (!q) return sideRecipes;
+    return sideRecipes.filter((r) => {
+      const inTitle = r.title.toLowerCase().includes(q);
+      const inNotes = r.notes?.toLowerCase().includes(q) || false;
+      const inIngredients = r.ingredients?.some((ing) => ing.name.toLowerCase().includes(q)) || false;
+      return inTitle || inNotes || inIngredients;
+    });
+  }, [sideRecipes, activeTab, sideSearchQuery]);
+
+  // Handle Save Recipe or Side
   const handleSaveRecipe = async (saved: Recipe) => {
     await saveRecipe(saved);
-    showToast(
-      editingRecipe === 'new'
-        ? `Recette "${saved.title}" ajoutée au carnet !`
-        : `Recette "${saved.title}" mise à jour !`
-    );
+    if (saved.isSide) {
+      showToast(
+        duplicatingSide
+          ? `Accompagnement "${saved.title}" dupliqué !`
+          : editingSide === 'new'
+          ? `Accompagnement "${saved.title}" ajouté !`
+          : `Accompagnement "${saved.title}" mis à jour !`
+      );
+    } else {
+      showToast(
+        duplicatingRecipe
+          ? `Recette "${saved.title}" dupliquée au carnet !`
+          : editingRecipe === 'new'
+          ? `Recette "${saved.title}" ajoutée au carnet !`
+          : `Recette "${saved.title}" mise à jour !`
+      );
+    }
     setEditingRecipe(null);
+    setDuplicatingRecipe(null);
+    setEditingSide(null);
+    setDuplicatingSide(null);
     if (viewingRecipe?.id === saved.id) {
       setViewingRecipe(saved);
     }
   };
 
-  // Handle Delete Recipe (Permanent deletion)
+  // Handle Edit or Duplicate routing (regular recipe vs side)
+  const handleEditItem = (item: Recipe) => {
+    if (item.isSide) {
+      setEditingSide(item);
+    } else {
+      setEditingRecipe(item);
+    }
+  };
+
+  const handleDuplicateItem = (item: Recipe) => {
+    if (item.isSide) {
+      setDuplicatingSide(item);
+    } else {
+      setDuplicatingRecipe(item);
+    }
+  };
+
+  // Handle Delete Recipe or Side (Permanent deletion)
   const handleDeleteRecipe = async (recipeId: string) => {
     // 1. Immediately remove from active state so it disappears from the list with zero lag
     setRecipes((prev) => prev.filter((r) => r.id !== recipeId));
     setEditingRecipe(null);
+    setDuplicatingRecipe(null);
+    setEditingSide(null);
+    setDuplicatingSide(null);
     setViewingRecipe(null);
 
     // 2. Perform permanent deletion in storage + Firestore + clean from meal plans
     await deleteRecipe(recipeId);
-    showToast('Recette définitivement supprimée du carnet.');
+    showToast('Élément définitivement supprimé du carnet.');
   };
 
   // Handle Save Meal Plan
@@ -295,14 +354,15 @@ export default function App() {
 
       {/* Main Container */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 flex-1 w-full space-y-6">
-        {/* Season & Planner Tabs */}
+        {/* Season, Accompagnements & Planner Tabs */}
         <SeasonTabs
           activeTab={activeTab}
           onSelectTab={setActiveTab}
           recipes={recipes}
+          onNewSide={() => setEditingSide('new')}
         />
 
-        {/* Tab Content: Season View vs Meal Planner */}
+        {/* Tab Content: Planner vs Sides vs Recipes */}
         {activeTab === 'planner' ? (
           <MealPlanner
             mealPlans={mealPlans}
@@ -310,6 +370,81 @@ export default function App() {
             onSavePlan={handleSaveMealPlan}
             onViewRecipe={(r) => setViewingRecipe(r)}
           />
+        ) : activeTab === 'sides' ? (
+          <div className="space-y-6">
+            {/* Simple Search Bar for Accompagnements */}
+            <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-stone-200/90 shadow-xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={sideSearchQuery}
+                  onChange={(e) => setSideSearchQuery(e.target.value)}
+                  placeholder="Rechercher un accompagnement ou ingrédient (riz, frites, saumon...)"
+                  className="w-full pl-10 pr-4 py-2 rounded-xl border border-stone-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 text-sm text-stone-900"
+                />
+              </div>
+              <span className="text-xs font-medium text-stone-600 px-2 shrink-0">
+                {filteredSides.length} élément{filteredSides.length > 1 ? 's' : ''}
+              </span>
+            </div>
+
+            {isLoading ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {[1, 2, 3].map((n) => (
+                  <div
+                    key={n}
+                    className="h-80 rounded-2xl bg-white border border-stone-200 animate-pulse"
+                  />
+                ))}
+              </div>
+            ) : filteredSides.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredSides.map((side) => (
+                  <RecipeCard
+                    key={side.id}
+                    recipe={side}
+                    onView={(r) => setViewingRecipe(r)}
+                    onEdit={handleEditItem}
+                    onDuplicate={handleDuplicateItem}
+                    onAddToPlan={(r) => setQuickAddToPlanRecipe(r)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="py-14 text-center bg-white rounded-3xl border border-stone-200/90 p-8 shadow-xs space-y-4">
+                <div className="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto">
+                  <Salad className="w-7 h-7" />
+                </div>
+                <div>
+                  <h3 className="font-serif text-xl font-bold text-stone-900">
+                    Aucun accompagnement trouvé
+                  </h3>
+                  <p className="text-sm text-stone-600 max-w-md mx-auto mt-1">
+                    Ajoutez facilement vos accompagnements simples (riz, pâtes, légumes, grillades...) avec photo et ingrédients.
+                  </p>
+                </div>
+                <div className="flex items-center justify-center gap-3 pt-1">
+                  {sideSearchQuery && (
+                    <button
+                      onClick={() => setSideSearchQuery('')}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-stone-100 hover:bg-stone-200 text-stone-800 cursor-pointer"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      <span>Réinitialiser</span>
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setEditingSide('new')}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Nouvel accompagnement</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         ) : (
           <div className="space-y-6">
             {/* Search and Filters Bar */}
@@ -344,7 +479,8 @@ export default function App() {
                     key={recipe.id}
                     recipe={recipe}
                     onView={(r) => setViewingRecipe(r)}
-                    onEdit={(r) => setEditingRecipe(r)}
+                    onEdit={handleEditItem}
+                    onDuplicate={handleDuplicateItem}
                     onAddToPlan={(r) => setQuickAddToPlanRecipe(r)}
                   />
                 ))}
@@ -411,24 +547,39 @@ export default function App() {
           onClose={() => setViewingRecipe(null)}
           onEdit={(r) => {
             setViewingRecipe(null);
-            setEditingRecipe(r);
+            handleEditItem(r);
+          }}
+          onDuplicate={(r) => {
+            setViewingRecipe(null);
+            handleDuplicateItem(r);
           }}
           onAddToPlan={(r) => setQuickAddToPlanRecipe(r)}
         />
       )}
 
-      {/* Edit / New Recipe Form Modal */}
-      {editingRecipe && (
+      {/* Edit / New / Duplicate Recipe Form Modal */}
+      {(editingRecipe || duplicatingRecipe) && (
         <RecipeFormModal
-          recipe={editingRecipe === 'new' ? null : editingRecipe}
-          initialSeason={activeTab === 'planner' || activeTab === 'all' ? currentSeasonKey : activeTab}
+          recipe={
+            duplicatingRecipe
+              ? duplicatingRecipe
+              : editingRecipe === 'new'
+              ? null
+              : editingRecipe
+          }
+          isDuplicate={!!duplicatingRecipe}
+          initialSeason={
+            activeTab === 'planner' || activeTab === 'all' || activeTab === 'sides'
+              ? currentSeasonKey
+              : activeTab
+          }
           existingTags={
-            editingRecipe === 'new'
+            editingRecipe === 'new' || duplicatingRecipe
               ? availableTags
               : Array.from(
                   new Set(
-                    recipes
-                      .filter((r) => r.id !== editingRecipe.id)
+                    mainRecipes
+                      .filter((r) => r.id !== (editingRecipe as Recipe).id)
                       .flatMap((r) => r.tags || [])
                       .map((t) => t.trim().replace(/^#/, ''))
                       .filter(Boolean)
@@ -437,7 +588,30 @@ export default function App() {
           }
           onSave={handleSaveRecipe}
           onDelete={handleDeleteRecipe}
-          onClose={() => setEditingRecipe(null)}
+          onClose={() => {
+            setEditingRecipe(null);
+            setDuplicatingRecipe(null);
+          }}
+        />
+      )}
+
+      {/* Edit / New / Duplicate Accompagnement Form Modal */}
+      {(editingSide || duplicatingSide) && (
+        <SideFormModal
+          side={
+            duplicatingSide
+              ? duplicatingSide
+              : editingSide === 'new'
+              ? null
+              : editingSide
+          }
+          isDuplicate={!!duplicatingSide}
+          onSave={handleSaveRecipe}
+          onDelete={handleDeleteRecipe}
+          onClose={() => {
+            setEditingSide(null);
+            setDuplicatingSide(null);
+          }}
         />
       )}
 

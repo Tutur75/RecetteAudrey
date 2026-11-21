@@ -24,6 +24,7 @@ export interface Recipe {
   instructions: string[];
   notes: string;
   imageUrl: string;
+  isSide?: boolean; // True for Accompagnements (simple base/side recipes)
   rating?: number;
   createdAt: string;
   updatedAt: string;

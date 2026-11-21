@@ -27,6 +27,7 @@ import {
 
 interface RecipeFormModalProps {
   recipe?: Recipe | null; // null for new recipe
+  isDuplicate?: boolean;
   initialSeason?: Season;
   existingTags?: string[];
   onSave: (recipe: Recipe) => Promise<void>;
@@ -36,16 +37,19 @@ interface RecipeFormModalProps {
 
 export const RecipeFormModal: React.FC<RecipeFormModalProps> = ({
   recipe,
+  isDuplicate = false,
   initialSeason = 'autumn',
   existingTags = [],
   onSave,
   onDelete,
   onClose
 }) => {
-  const isEditing = !!recipe;
+  const isEditing = !!recipe && !isDuplicate;
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [title, setTitle] = useState(recipe?.title || '');
+  const [title, setTitle] = useState(
+    recipe ? (isDuplicate ? `${recipe.title} (copie)` : recipe.title) : ''
+  );
   
   // Multi-season state
   const initialSeasons: Season[] = recipe?.seasons?.length
@@ -120,14 +124,12 @@ export const RecipeFormModal: React.FC<RecipeFormModalProps> = ({
 
   const [ingredients, setIngredients] = useState<Ingredient[]>(
     recipe?.ingredients?.length
-      ? recipe.ingredients.map((ing) => ({
+      ? recipe.ingredients.map((ing, idx) => ({
           ...ing,
+          id: isDuplicate ? `${Date.now()}-${idx}` : ing.id,
           category: normalizeIngredientCategory(ing.category, ing.name)
         }))
-      : [
-          { id: '1', name: 'Beurre demi-sel', amount: '30', unit: 'G', category: 'Laiterie & Fromage' },
-          { id: '2', name: 'Échalotes', amount: '2', unit: '', category: 'Fruits & Légumes' }
-        ]
+      : []
   );
 
   const [instructions, setInstructions] = useState<string[]>(
@@ -265,7 +267,7 @@ export const RecipeFormModal: React.FC<RecipeFormModalProps> = ({
       setErrorMsg(null);
 
       const payload: Recipe = {
-        id: recipe?.id || `rec-${Date.now()}`,
+        id: isEditing && recipe ? recipe.id : `rec-${Date.now()}`,
         title: title.trim(),
         season: selectedSeasons[0] || 'autumn',
         seasons: selectedSeasons,
@@ -279,7 +281,7 @@ export const RecipeFormModal: React.FC<RecipeFormModalProps> = ({
         notes: notes.trim(),
         imageUrl: imageUrl.trim() || DEFAULT_RECIPE_IMAGE,
         rating: recipe?.rating || 5,
-        createdAt: recipe?.createdAt || new Date().toISOString(),
+        createdAt: isEditing && recipe ? recipe.createdAt : new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
 
@@ -300,7 +302,11 @@ export const RecipeFormModal: React.FC<RecipeFormModalProps> = ({
         <div className="px-6 py-4 border-b border-stone-200 flex items-center justify-between bg-stone-50/80">
           <div>
             <h2 className="font-serif text-xl sm:text-2xl font-bold text-stone-900">
-              {isEditing ? 'Modifier la recette' : 'Créer une nouvelle recette'}
+              {isDuplicate
+                ? 'Dupliquer la recette'
+                : isEditing
+                ? 'Modifier la recette'
+                : 'Créer une nouvelle recette'}
             </h2>
             <p className="text-xs text-stone-700">
               Édition complète : ingrédients, saisons, astuces d&apos;Audrey et photo
@@ -589,65 +595,81 @@ export const RecipeFormModal: React.FC<RecipeFormModalProps> = ({
               </button>
             </div>
 
-            <div className="space-y-2">
-              {ingredients.map((ing, idx) => (
-                <div key={ing.id} className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    placeholder="Nom (ex: Asperges vertes)"
-                    value={ing.name}
-                    onChange={(e) => handleUpdateIngredient(ing.id, 'name', e.target.value)}
-                    className="flex-3 px-3 py-2 rounded-xl border border-stone-300 text-sm"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Qté (ex: 250)"
-                    value={ing.amount}
-                    onChange={(e) => handleUpdateIngredient(ing.id, 'amount', e.target.value)}
-                    className="w-20 px-3 py-2 rounded-xl border border-stone-300 text-sm"
-                  />
-                  <select
-                    value={ing.unit || ''}
-                    onChange={(e) => handleUpdateIngredient(ing.id, 'unit', e.target.value)}
-                    className="w-24 sm:w-28 px-2.5 py-2 rounded-xl border border-stone-300 text-sm bg-white text-stone-900 font-medium shrink-0"
-                    title="Unité de quantité"
-                  >
-                    <option value="">Unité...</option>
-                    {ing.unit &&
-                      !(INGREDIENT_UNITS as readonly string[]).includes(ing.unit) && (
-                        <option value={ing.unit}>{ing.unit}</option>
-                      )}
-                    {INGREDIENT_UNITS.map((u) => (
-                      <option key={u} value={u}>
-                        {u}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    value={normalizeIngredientCategory(ing.category, ing.name)}
-                    onChange={(e) => handleUpdateIngredient(ing.id, 'category', e.target.value)}
-                    className="w-40 sm:w-48 px-2.5 py-2 rounded-xl border border-stone-300 text-xs bg-white text-stone-800 font-medium shrink-0"
-                    title="Catégorie d'ingrédient pour la liste de courses"
-                  >
-                    {INGREDIENT_CATEGORIES.map((cat) => {
-                      const meta = CATEGORY_METADATA[cat];
-                      return (
-                        <option key={cat} value={cat}>
-                          {meta.emoji} {cat}
+            {ingredients.length === 0 ? (
+              <div className="p-4 rounded-xl bg-stone-50 border border-dashed border-stone-300 text-center space-y-2">
+                <p className="text-xs text-stone-600">
+                  Aucun ingrédient ajouté pour le moment.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleAddIngredient}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-white border border-stone-300 hover:border-orange-500 text-xs font-semibold text-orange-700 shadow-2xs transition-colors cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Ajouter le premier ingrédient</span>
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {ingredients.map((ing) => (
+                  <div key={ing.id} className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      placeholder="Nom (ex: Asperges vertes)"
+                      value={ing.name}
+                      onChange={(e) => handleUpdateIngredient(ing.id, 'name', e.target.value)}
+                      className="flex-3 px-3 py-2 rounded-xl border border-stone-300 text-sm"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Qté (ex: 250)"
+                      value={ing.amount}
+                      onChange={(e) => handleUpdateIngredient(ing.id, 'amount', e.target.value)}
+                      className="w-20 px-3 py-2 rounded-xl border border-stone-300 text-sm"
+                    />
+                    <select
+                      value={ing.unit || ''}
+                      onChange={(e) => handleUpdateIngredient(ing.id, 'unit', e.target.value)}
+                      className="w-24 sm:w-28 px-2.5 py-2 rounded-xl border border-stone-300 text-sm bg-white text-stone-900 font-medium shrink-0"
+                      title="Unité de quantité"
+                    >
+                      <option value="">Unité...</option>
+                      {ing.unit &&
+                        !(INGREDIENT_UNITS as readonly string[]).includes(ing.unit) && (
+                          <option value={ing.unit}>{ing.unit}</option>
+                        )}
+                      {INGREDIENT_UNITS.map((u) => (
+                        <option key={u} value={u}>
+                          {u}
                         </option>
-                      );
-                    })}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveIngredient(ing.id)}
-                    className="p-2 text-stone-400 hover:text-rose-600 rounded-lg hover:bg-rose-50"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
-            </div>
+                      ))}
+                    </select>
+                    <select
+                      value={normalizeIngredientCategory(ing.category, ing.name)}
+                      onChange={(e) => handleUpdateIngredient(ing.id, 'category', e.target.value)}
+                      className="w-40 sm:w-48 px-2.5 py-2 rounded-xl border border-stone-300 text-xs bg-white text-stone-800 font-medium shrink-0"
+                      title="Catégorie d'ingrédient pour la liste de courses"
+                    >
+                      {INGREDIENT_CATEGORIES.map((cat) => {
+                        const meta = CATEGORY_METADATA[cat];
+                        return (
+                          <option key={cat} value={cat}>
+                            {meta.emoji} {cat}
+                          </option>
+                        );
+                      })}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveIngredient(ing.id)}
+                      className="p-2 text-stone-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 cursor-pointer"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Instructions Steps (optional) */}

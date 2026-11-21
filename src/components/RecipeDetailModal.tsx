@@ -3,14 +3,13 @@ import {
   Check,
   ChefHat,
   Clock,
+  Copy,
   Edit3,
   Flame,
   Lightbulb,
   Minus,
   Plus,
   Printer,
-  Share2,
-  Users,
   X
 } from 'lucide-react';
 import React, { useState } from 'react';
@@ -31,6 +30,7 @@ interface RecipeDetailModalProps {
   recipe: Recipe | null;
   onClose: () => void;
   onEdit: (recipe: Recipe) => void;
+  onDuplicate?: (recipe: Recipe) => void;
   onAddToPlan?: (recipe: Recipe) => void;
 }
 
@@ -38,6 +38,7 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
   recipe,
   onClose,
   onEdit,
+  onDuplicate,
   onAddToPlan
 }) => {
   if (!recipe) return null;
@@ -78,9 +79,18 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
           >
             <Printer className="w-4 h-4" />
           </button>
+          {onDuplicate && (
+            <button
+              onClick={() => onDuplicate(recipe)}
+              title="Dupliquer"
+              className="p-2.5 rounded-full bg-white/90 hover:bg-white text-stone-700 hover:text-orange-700 shadow-md backdrop-blur-xs transition-all cursor-pointer"
+            >
+              <Copy className="w-4 h-4" />
+            </button>
+          )}
           <button
             onClick={() => onEdit(recipe)}
-            title="Modifier la recette"
+            title="Modifier"
             className="p-2.5 rounded-full bg-white/90 hover:bg-white text-stone-700 hover:text-orange-700 shadow-md backdrop-blur-xs transition-all cursor-pointer"
           >
             <Edit3 className="w-4 h-4" />
@@ -114,20 +124,27 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
             <div className="absolute inset-0 bg-gradient-to-t from-stone-950/80 via-stone-950/30 to-transparent" />
 
             <div className="absolute bottom-6 left-6 right-6 text-white">
-              {/* Season Pills */}
+              {/* Season Pills or Accompagnement badge */}
               <div className="flex items-center gap-2 flex-wrap mb-2.5">
-                {getRecipeSeasons(recipe).map((s) => {
-                  const sInfo = SEASONS[s] || SEASONS.autumn;
-                  return (
-                    <span
-                      key={s}
-                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-white/95 text-stone-900 shadow-md"
-                    >
-                      <span>{sInfo.emoji}</span>
-                      <span>Recette de {sInfo.label}</span>
-                    </span>
-                  );
-                })}
+                {recipe.isSide ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-600 text-white shadow-md">
+                    <span>🥗</span>
+                    <span>Accompagnement</span>
+                  </span>
+                ) : (
+                  getRecipeSeasons(recipe).map((s) => {
+                    const sInfo = SEASONS[s] || SEASONS.autumn;
+                    return (
+                      <span
+                        key={s}
+                        className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-white/95 text-stone-900 shadow-md"
+                      >
+                        <span>{sInfo.emoji}</span>
+                        <span>Recette de {sInfo.label}</span>
+                      </span>
+                    );
+                  })
+                )}
               </div>
 
               <h2 className="font-serif text-2xl sm:text-4xl font-bold tracking-tight text-white drop-shadow-md">
@@ -309,27 +326,39 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
               )}
 
               {/* Action Buttons in Modal Bottom */}
-              <div className="pt-6 border-t border-stone-200 flex items-center justify-between gap-3 flex-wrap">
+              <div className="pt-6 border-t border-stone-200 flex items-center justify-between gap-2.5 flex-wrap">
                 {onAddToPlan && (
                   <button
                     onClick={() => {
                       onAddToPlan(recipe);
                       onClose();
                     }}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-orange-800 bg-orange-100 hover:bg-orange-200 transition-colors"
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-orange-800 bg-orange-100 hover:bg-orange-200 transition-colors cursor-pointer"
                   >
                     <CalendarPlus className="w-4 h-4" />
-                    <span>Ajouter aux menus de la semaine</span>
+                    <span>Ajouter aux menus</span>
                   </button>
                 )}
 
-                <button
-                  onClick={() => onEdit(recipe)}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-stone-900 hover:bg-stone-800 text-white ml-auto transition-colors"
-                >
-                  <Edit3 className="w-4 h-4" />
-                  <span>Modifier la recette</span>
-                </button>
+                <div className="flex items-center gap-2 ml-auto">
+                  {onDuplicate && (
+                    <button
+                      onClick={() => onDuplicate(recipe)}
+                      className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-stone-100 hover:bg-stone-200 text-stone-800 border border-stone-200 transition-colors cursor-pointer"
+                    >
+                      <Copy className="w-4 h-4" />
+                      <span>Dupliquer</span>
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => onEdit(recipe)}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-stone-900 hover:bg-stone-800 text-white transition-colors cursor-pointer"
+                  >
+                    <Edit3 className="w-4 h-4" />
+                    <span>{recipe.isSide ? 'Modifier' : 'Modifier la recette'}</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>

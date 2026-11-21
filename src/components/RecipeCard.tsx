@@ -1,4 +1,4 @@
-import { CalendarPlus, ChefHat, Clock, Edit3, Flame, Heart, Lightbulb, Sparkles, Users } from 'lucide-react';
+import { CalendarPlus, ChefHat, Clock, Copy, Edit3, Flame, Lightbulb, Users } from 'lucide-react';
 import React from 'react';
 import { SEASONS } from '../lib/seasons';
 import { DEFAULT_RECIPE_IMAGE, formatServings, getRecipeImageUrl, getRecipeSeasons, isDefaultRecipeImage, Recipe } from '../types/recipe';
@@ -7,6 +7,7 @@ interface RecipeCardProps {
   recipe: Recipe;
   onView: (recipe: Recipe) => void;
   onEdit: (recipe: Recipe) => void;
+  onDuplicate?: (recipe: Recipe) => void;
   onAddToPlan?: (recipe: Recipe) => void;
 }
 
@@ -14,6 +15,7 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({
   recipe,
   onView,
   onEdit,
+  onDuplicate,
   onAddToPlan
 }) => {
   const seasons = getRecipeSeasons(recipe);
@@ -49,26 +51,35 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({
         {/* Gradient overlay for readability */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20 pointer-events-none" />
 
-        {/* Season Badges (Top Left) */}
+        {/* Season Badges or Accompagnement Badge (Top Left) */}
         <div className="absolute top-3 left-3 flex items-center gap-1 flex-wrap max-w-[70%]">
-          {seasons.map((s) => {
-            const seasonInfo = SEASONS[s] || SEASONS.autumn;
-            return (
-              <span
-                key={s}
-                className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-white/95 text-stone-900 shadow-sm backdrop-blur-xs"
-              >
-                <span>{seasonInfo.emoji}</span>
-                <span>{seasonInfo.label}</span>
-              </span>
-            );
-          })}
+          {recipe.isSide ? (
+            <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-600 text-white shadow-sm">
+              <span>🥗</span>
+              <span>Accompagnement</span>
+            </span>
+          ) : (
+            seasons.map((s) => {
+              const seasonInfo = SEASONS[s] || SEASONS.autumn;
+              return (
+                <span
+                  key={s}
+                  className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-white/95 text-stone-900 shadow-sm backdrop-blur-xs"
+                >
+                  <span>{seasonInfo.emoji}</span>
+                  <span>{seasonInfo.label}</span>
+                </span>
+              );
+            })
+          )}
         </div>
 
         {/* Difficulty Badge (Top Right) */}
-        <div className={`absolute top-3 right-3 px-2.5 py-0.5 rounded-full text-xs font-medium border shadow-xs backdrop-blur-xs ${difficultyColors}`}>
-          {recipe.difficulty}
-        </div>
+        {!recipe.isSide && (
+          <div className={`absolute top-3 right-3 px-2.5 py-0.5 rounded-full text-xs font-medium border shadow-xs backdrop-blur-xs ${difficultyColors}`}>
+            {recipe.difficulty}
+          </div>
+        )}
 
         {/* Quick prep & cook time overlay at bottom of image */}
         <div className="absolute bottom-2.5 left-3 right-3 flex items-center justify-between text-white text-xs font-medium drop-shadow-md">
@@ -112,6 +123,21 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({
             </div>
           )}
 
+          {/* Simple ingredients preview for Accompagnements */}
+          {recipe.isSide && recipe.ingredients.length > 0 && (
+            <div className="flex items-center gap-1.5 flex-wrap mt-2.5">
+              {recipe.ingredients.slice(0, 4).map((ing) => (
+                <span
+                  key={ing.id}
+                  className="text-[11px] px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-900 border border-emerald-200/70 font-medium"
+                >
+                  {ing.name}
+                  {ing.amount ? ` (${ing.amount}${ing.unit ? ` ${ing.unit}` : ''})` : ''}
+                </span>
+              ))}
+            </div>
+          )}
+
           {/* Tags */}
           {recipe.tags && recipe.tags.length > 0 && (
             <div className="flex items-center gap-1.5 flex-wrap mt-3">
@@ -137,10 +163,18 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({
           {/* View recipe button */}
           <button
             onClick={() => onView(recipe)}
-            className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-semibold text-orange-700 bg-orange-50 hover:bg-orange-100 transition-colors cursor-pointer"
+            className={`flex-1 inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
+              recipe.isSide
+                ? 'text-emerald-800 bg-emerald-50 hover:bg-emerald-100'
+                : 'text-orange-700 bg-orange-50 hover:bg-orange-100'
+            }`}
           >
             <ChefHat className="w-3.5 h-3.5" />
-            <span>Voir recette ({recipe.ingredients.length} ingr.)</span>
+            <span>
+              {recipe.isSide
+                ? `Voir fiche (${recipe.ingredients.length} ingr.)`
+                : `Voir recette (${recipe.ingredients.length} ingr.)`}
+            </span>
           </button>
 
           {/* Quick add to meal plan */}
@@ -162,6 +196,18 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({
           >
             <Edit3 className="w-4 h-4" />
           </button>
+
+          {/* Duplicate button */}
+          {onDuplicate && (
+            <button
+              onClick={() => onDuplicate(recipe)}
+              title="Dupliquer cette fiche"
+              className="inline-flex items-center gap-1 px-2.5 py-2 rounded-xl text-xs font-semibold text-stone-600 hover:text-orange-700 hover:bg-orange-50 border border-stone-200 hover:border-orange-200 transition-colors cursor-pointer"
+            >
+              <Copy className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Dupliquer</span>
+            </button>
+          )}
         </div>
       </div>
     </article>

@@ -7,7 +7,7 @@ import {
   setDoc,
   Unsubscribe
 } from 'firebase/firestore';
-import { INITIAL_MEAL_PLANS, INITIAL_RECIPES } from '../data/seedRecipes';
+import { INITIAL_MEAL_PLANS, INITIAL_RECIPES, INITIAL_SIDES } from '../data/seedRecipes';
 import { DayKey, Recipe, WeekPlan } from '../types/recipe';
 import { db, testConnection } from './firebase';
 
@@ -15,6 +15,8 @@ const LOCAL_STORAGE_RECIPES_KEY = 'audrey_recipes_v1';
 const LOCAL_STORAGE_PLANS_KEY = 'audrey_meal_plans_v1';
 const LOCAL_STORAGE_DELETED_KEY = 'audrey_deleted_recipe_ids_v1';
 const LOCAL_STORAGE_SEEDED_KEY = 'audrey_seeded_v1';
+const LOCAL_STORAGE_SIDES_SEEDED_KEY = 'audrey_sides_seeded_v1';
+const LOCAL_STORAGE_SIDES_CLOUD_SEEDED_KEY = 'audrey_sides_cloud_seeded_v1';
 
 /**
  * Returns the set of permanently deleted recipe IDs to prevent any accidental re-seeding.
@@ -133,7 +135,22 @@ export function getLocalRecipes(): Recipe[] {
       const parsed = JSON.parse(stored);
       if (Array.isArray(parsed)) {
         const filtered = parsed.filter((r: any) => r && r.id && !deletedIds.has(r.id));
-        return sanitizeRecipes(filtered);
+        const list = sanitizeRecipes(filtered);
+
+        // One-time seed of initial Accompagnements for existing notebooks
+        if (!localStorage.getItem(LOCAL_STORAGE_SIDES_SEEDED_KEY)) {
+          localStorage.setItem(LOCAL_STORAGE_SIDES_SEEDED_KEY, 'true');
+          const missingSides = INITIAL_SIDES.filter(
+            (s) => !deletedIds.has(s.id) && !list.some((r) => r.id === s.id)
+          );
+          if (missingSides.length > 0) {
+            const merged = [...list, ...missingSides];
+            saveLocalRecipes(merged);
+            return merged;
+          }
+        }
+
+        return list;
       }
     }
   } catch (err) {
@@ -144,7 +161,8 @@ export function getLocalRecipes(): Recipe[] {
   const isSeeded = localStorage.getItem(LOCAL_STORAGE_SEEDED_KEY);
   if (!isSeeded) {
     localStorage.setItem(LOCAL_STORAGE_SEEDED_KEY, 'true');
-    const initialClean = INITIAL_RECIPES.filter((r) => !deletedIds.has(r.id));
+    localStorage.setItem(LOCAL_STORAGE_SIDES_SEEDED_KEY, 'true');
+    const initialClean = [...INITIAL_RECIPES, ...INITIAL_SIDES].filter((r) => !deletedIds.has(r.id));
     saveLocalRecipes(initialClean);
     return initialClean;
   }
@@ -223,15 +241,25 @@ export async function seedFirestoreIfEmpty(): Promise<void> {
   const path = 'recipes';
   try {
     const snapshot = await getDocs(collection(db, path));
+    const deletedIds = getDeletedRecipeIds();
     if (snapshot.empty) {
-      const deletedIds = getDeletedRecipeIds();
-      for (const recipe of INITIAL_RECIPES) {
+      for (const recipe of [...INITIAL_RECIPES, ...INITIAL_SIDES]) {
         if (!deletedIds.has(recipe.id)) {
           await setDoc(doc(db, 'recipes', recipe.id), recipe);
         }
       }
       for (const plan of INITIAL_MEAL_PLANS) {
         await setDoc(doc(db, 'mealPlans', plan.id), plan);
+      }
+      localStorage.setItem(LOCAL_STORAGE_SIDES_CLOUD_SEEDED_KEY, 'true');
+    } else if (!localStorage.getItem(LOCAL_STORAGE_SIDES_CLOUD_SEEDED_KEY)) {
+      localStorage.setItem(LOCAL_STORAGE_SIDES_CLOUD_SEEDED_KEY, 'true');
+      const existingIds = new Set<string>();
+      snapshot.forEach((docSnap) => existingIds.add(docSnap.id));
+      for (const side of INITIAL_SIDES) {
+        if (!deletedIds.has(side.id) && !existingIds.has(side.id)) {
+          await setDoc(doc(db, 'recipes', side.id), side);
+        }
       }
     }
     // Never backfill deleted recipes if collection is not empty!
@@ -275,6 +303,14 @@ export function subscribeToRecipes(
               cloudRecipes.push(data);
             }
           });
+          // Ensure locally-seeded INITIAL_SIDES aren't temporarily dropped before cloud seed completes
+          if (!localStorage.getItem(LOCAL_STORAGE_SIDES_CLOUD_SEEDED_KEY)) {
+            INITIAL_SIDES.forEach((side) => {
+              if (!deletedIds.has(side.id) && !cloudRecipes.some((r) => r.id === side.id)) {
+                cloudRecipes.push(side);
+              }
+            });
+          }
           const sanitized = sanitizeRecipes(cloudRecipes);
           saveLocalRecipes(sanitized);
           onUpdate(sanitized, true);

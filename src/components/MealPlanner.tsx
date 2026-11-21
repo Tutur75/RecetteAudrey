@@ -85,7 +85,7 @@ export const MealPlanner: React.FC<MealPlannerProps> = ({
   } | null>(null);
 
   const [pickerSearch, setPickerSearch] = useState('');
-  const [pickerSeason, setPickerSeason] = useState<Season | 'all'>('all');
+  const [pickerSeason, setPickerSeason] = useState<Season | 'all' | 'sides'>('all');
 
   // Custom text input modal state (livraison, restes, etc.)
   const [customTextSlot, setCustomTextSlot] = useState<{
@@ -531,7 +531,12 @@ export const MealPlanner: React.FC<MealPlannerProps> = ({
 
   // Filtered recipes for picker modal
   const filteredPickerRecipes = recipes.filter((r) => {
-    const matchesSeason = pickerSeason === 'all' || recipeMatchesSeason(r, pickerSeason);
+    const matchesSeason =
+      pickerSeason === 'all'
+        ? true
+        : pickerSeason === 'sides'
+        ? !!r.isSide
+        : !r.isSide && recipeMatchesSeason(r, pickerSeason);
     const matchesQuery =
       !pickerSearch.trim() ||
       r.title.toLowerCase().includes(pickerSearch.toLowerCase()) ||
@@ -1402,7 +1407,7 @@ export const MealPlanner: React.FC<MealPlannerProps> = ({
                       <button
                         key={sKey}
                         onClick={() => setPickerSeason(sKey)}
-                        className={`text-xs px-2.5 py-1 rounded-lg font-medium flex items-center gap-1 cursor-pointer ${
+                        className={`text-xs px-2.5 py-1 rounded-lg font-medium flex items-center gap-1 cursor-pointer shrink-0 ${
                           pickerSeason === sKey
                             ? 'bg-orange-700 text-white'
                             : 'bg-stone-100 hover:bg-stone-200 text-stone-700'
@@ -1412,6 +1417,16 @@ export const MealPlanner: React.FC<MealPlannerProps> = ({
                       </button>
                     );
                   })}
+                  <button
+                    onClick={() => setPickerSeason('sides')}
+                    className={`text-xs px-2.5 py-1 rounded-lg font-medium flex items-center gap-1 cursor-pointer shrink-0 ${
+                      pickerSeason === 'sides'
+                        ? 'bg-emerald-700 text-white'
+                        : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-200'
+                    }`}
+                  >
+                    <span>🥗 Accompagnements</span>
+                  </button>
                 </div>
               </div>
 
@@ -1446,9 +1461,16 @@ export const MealPlanner: React.FC<MealPlannerProps> = ({
                             }}
                           />
                           <div className="min-w-0">
-                            <h4 className="font-bold text-stone-900 text-sm">
-                              {r.title}
-                            </h4>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h4 className="font-bold text-stone-900 text-sm">
+                                {r.title}
+                              </h4>
+                              {r.isSide && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-semibold">
+                                  🥗 Accompagnement
+                                </span>
+                              )}
+                            </div>
                             <div className="flex items-center gap-2 text-xs text-stone-600 mt-0.5">
                               <span>👥 {formatServings(r.servings)}</span>
                               <span>•</span>

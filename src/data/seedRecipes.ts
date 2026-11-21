@@ -1177,3 +1177,189 @@ export const INITIAL_MEAL_PLANS = [
     updatedAt: new Date().toISOString()
   }
 ];
+
+export const INITIAL_SIDES: Recipe[] = [
+  {
+    id: 'side-riz',
+    title: 'Riz',
+    season: 'autumn',
+    seasons: ['spring', 'summer', 'autumn', 'winter'],
+    prepTime: 2,
+    cookTime: 12,
+    servings: '4,25 Pers',
+    difficulty: 'Facile',
+    tags: [],
+    isSide: true,
+    imageUrl: '',
+    ingredients: [
+      { id: '1', name: 'Riz', amount: '300', unit: 'G', category: 'Pâtes Riz & Produits secs' }
+    ],
+    instructions: [],
+    notes: 'Cuisson à l’eau bouillante salée (10 à 12 min) ou façon pilaf.',
+    createdAt: '2026-11-21T09:00:00.000Z',
+    updatedAt: '2026-11-21T09:00:00.000Z'
+  },
+  {
+    id: 'side-pates',
+    title: 'Pâtes',
+    season: 'autumn',
+    seasons: ['spring', 'summer', 'autumn', 'winter'],
+    prepTime: 2,
+    cookTime: 10,
+    servings: '4,25 Pers',
+    difficulty: 'Facile',
+    tags: [],
+    isSide: true,
+    imageUrl: '',
+    ingredients: [
+      { id: '1', name: 'Pâtes', amount: '400', unit: 'G', category: 'Pâtes Riz & Produits secs' }
+    ],
+    instructions: [],
+    notes: 'Cuisson al dente dans un grand volume d’eau bouillante salée.',
+    createdAt: '2026-11-21T09:01:00.000Z',
+    updatedAt: '2026-11-21T09:01:00.000Z'
+  },
+  {
+    id: 'side-pomme-de-terre',
+    title: 'Pomme de Terre',
+    season: 'autumn',
+    seasons: ['spring', 'summer', 'autumn', 'winter'],
+    prepTime: 10,
+    cookTime: 20,
+    servings: '4,25 Pers',
+    difficulty: 'Facile',
+    tags: [],
+    isSide: true,
+    imageUrl: '',
+    ingredients: [
+      { id: '1', name: 'Pommes de terre', amount: '800', unit: 'G', category: 'Fruits & Légumes' }
+    ],
+    instructions: [],
+    notes: 'À la vapeur, à l’eau, sautées à la poêle ou en purée.',
+    createdAt: '2026-11-21T09:02:00.000Z',
+    updatedAt: '2026-11-21T09:02:00.000Z'
+  },
+  {
+    id: 'side-frites-maison',
+    title: 'Frites Maison',
+    season: 'autumn',
+    seasons: ['spring', 'summer', 'autumn', 'winter'],
+    prepTime: 15,
+    cookTime: 15,
+    servings: '4,25 Pers',
+    difficulty: 'Facile',
+    tags: [],
+    isSide: true,
+    imageUrl: '',
+    ingredients: [
+      { id: '1', name: 'Pommes de terre à frites', amount: '1', unit: 'Kg', category: 'Fruits & Légumes' },
+      { id: '2', name: 'Huile de cuisson', amount: '1', unit: 'L', category: 'Ingrédients & Épices' }
+    ],
+    instructions: [],
+    notes: 'Double cuisson ou au four / Airfryer avec un filet d’huile.',
+    createdAt: '2026-11-21T09:03:00.000Z',
+    updatedAt: '2026-11-21T09:03:00.000Z'
+  },
+  {
+    id: 'side-haricot-vert',
+    title: 'Haricot Vert',
+    season: 'autumn',
+    seasons: ['spring', 'summer', 'autumn', 'winter'],
+    prepTime: 5,
+    cookTime: 12,
+    servings: '4,25 Pers',
+    difficulty: 'Facile',
+    tags: [],
+    isSide: true,
+    imageUrl: '',
+    ingredients: [
+      { id: '1', name: 'Haricots verts', amount: '500', unit: 'G', category: 'Fruits & Légumes' }
+    ],
+    instructions: [],
+    notes: 'Cuits vapeur puis poêlés avec une noisette de beurre et de l’ail.',
+    createdAt: '2026-11-21T09:04:00.000Z',
+    updatedAt: '2026-11-21T09:04:00.000Z'
+  },
+  {
+    id: 'side-ble',
+    title: 'Blé',
+    season: 'autumn',
+    seasons: ['spring', 'summer', 'autumn', 'winter'],
+    prepTime: 2,
+    cookTime: 10,
+    servings: '4,25 Pers',
+    difficulty: 'Facile',
+    tags: [],
+    isSide: true,
+    imageUrl: '',
+    ingredients: [
+      { id: '1', name: 'Blé (type Ebly)', amount: '250', unit: 'G', category: 'Pâtes Riz & Produits secs' }
+    ],
+    instructions: [],
+    notes: '10 min dans l’eau bouillante salée, égoutter avec une noix de beurre.',
+    createdAt: '2026-11-21T09:05:00.000Z',
+    updatedAt: '2026-11-21T09:05:00.000Z'
+  },
+  {
+    id: 'side-galette-maison',
+    title: 'Galette Maison',
+    season: 'autumn',
+    seasons: ['spring', 'summer', 'autumn', 'winter'],
+    prepTime: 10,
+    cookTime: 15,
+    servings: '4,25 Pers',
+    difficulty: 'Facile',
+    tags: [],
+    isSide: true,
+    imageUrl: '',
+    ingredients: [
+      { id: '1', name: 'Farine de sarrasin', amount: '250', unit: 'G', category: 'Pâtes Riz & Produits secs' },
+      { id: '2', name: 'Œufs', amount: '2', unit: '', category: 'Laiterie & Fromage' }
+    ],
+    instructions: [],
+    notes: 'Pâte à galette maison cuite à la poêle ou à la crêpière.',
+    createdAt: '2026-11-21T09:06:00.000Z',
+    updatedAt: '2026-11-21T09:06:00.000Z'
+  },
+  {
+    id: 'side-saumon-frais',
+    title: 'Saumon frais',
+    season: 'autumn',
+    seasons: ['spring', 'summer', 'autumn', 'winter'],
+    prepTime: 5,
+    cookTime: 12,
+    servings: '4,25 Pers',
+    difficulty: 'Facile',
+    tags: [],
+    isSide: true,
+    imageUrl: '',
+    ingredients: [
+      { id: '1', name: 'Pavés de saumon frais', amount: '500', unit: 'G', category: 'Viande & Poisson' }
+    ],
+    instructions: [],
+    notes: 'Poêlé côté peau, au four ou en papillote avec un filet de citron.',
+    createdAt: '2026-11-21T09:07:00.000Z',
+    updatedAt: '2026-11-21T09:07:00.000Z'
+  },
+  {
+    id: 'side-steack-hache',
+    title: 'Steack Haché',
+    season: 'autumn',
+    seasons: ['spring', 'summer', 'autumn', 'winter'],
+    prepTime: 2,
+    cookTime: 6,
+    servings: '4,25 Pers',
+    difficulty: 'Facile',
+    tags: [],
+    isSide: true,
+    imageUrl: '',
+    ingredients: [
+      { id: '1', name: 'Steaks hachés', amount: '500', unit: 'G', category: 'Viande & Poisson' }
+    ],
+    instructions: [],
+    notes: 'Saisis à la poêle bien chaude selon la cuisson souhaitée.',
+    createdAt: '2026-11-21T09:08:00.000Z',
+    updatedAt: '2026-11-21T09:08:00.000Z'
+  }
+];
+

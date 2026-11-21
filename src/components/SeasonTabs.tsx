@@ -1,4 +1,4 @@
-import { Calendar, ChevronRight, Sparkles, UtensilsCrossed } from 'lucide-react';
+import { Calendar, Plus, Salad, Sparkles, UtensilsCrossed } from 'lucide-react';
 import React from 'react';
 import { getCurrentSeason, SeasonalProduct, SEASONS } from '../lib/seasons';
 import { Recipe, recipeMatchesSeason, Season } from '../types/recipe';
@@ -45,22 +45,27 @@ const ProduceIllustration: React.FC<{ item: SeasonalProduct }> = ({ item }) => {
 };
 
 interface SeasonTabsProps {
-  activeTab: Season | 'all' | 'planner';
-  onSelectTab: (tab: Season | 'all' | 'planner') => void;
+  activeTab: Season | 'all' | 'sides' | 'planner';
+  onSelectTab: (tab: Season | 'all' | 'sides' | 'planner') => void;
   recipes: Recipe[];
+  onNewSide?: () => void;
 }
 
 export const SeasonTabs: React.FC<SeasonTabsProps> = ({
   activeTab,
   onSelectTab,
-  recipes
+  recipes,
+  onNewSide
 }) => {
   const currentSeasonKey = getCurrentSeason();
   const seasonKeys: Season[] = ['spring', 'summer', 'autumn', 'winter'];
 
-  // Calculate count per season (including multi-season recipes)
+  const mainRecipes = recipes.filter((r) => !r.isSide);
+  const sideRecipes = recipes.filter((r) => !!r.isSide);
+
+  // Calculate count per season (including multi-season recipes, excluding sides)
   const countBySeason = seasonKeys.reduce((acc, season) => {
-    acc[season] = recipes.filter((r) => recipeMatchesSeason(r, season)).length;
+    acc[season] = mainRecipes.filter((r) => recipeMatchesSeason(r, season)).length;
     return acc;
   }, {} as Record<Season, number>);
 
@@ -89,7 +94,7 @@ export const SeasonTabs: React.FC<SeasonTabsProps> = ({
                 : 'bg-stone-100 text-stone-600'
             }`}
           >
-            {recipes.length}
+            {mainRecipes.length}
           </span>
         </button>
 
@@ -172,8 +177,63 @@ export const SeasonTabs: React.FC<SeasonTabsProps> = ({
         </button>
       </div>
 
-      {/* Context Banner: either 'all' or specific active season */}
-      {activeTab === 'all' ? (
+      {/* Accompagnements Space Tab (below the season blocks) */}
+      <div className="flex items-center gap-2 pt-2.5 pb-2 border-b border-stone-200">
+        <button
+          onClick={() => onSelectTab('sides')}
+          className={`relative flex items-center gap-2 px-3.5 sm:px-4 py-2.5 sm:py-3 rounded-2xl text-sm font-medium transition-all whitespace-nowrap cursor-pointer shrink-0 ${
+            activeTab === 'sides'
+              ? 'bg-emerald-700 text-white shadow-md shadow-emerald-700/25'
+              : 'bg-emerald-50/70 hover:bg-emerald-100 text-emerald-950 border border-emerald-200'
+          }`}
+          title="Espace Accompagnements & ingrédients simples"
+        >
+          <Salad className={`w-4 h-4 ${activeTab === 'sides' ? 'text-emerald-200' : 'text-emerald-600'}`} />
+          <span className="font-serif font-semibold tracking-wide">Accompagnements</span>
+          <span
+            className={`text-xs px-2 py-0.5 rounded-full font-mono font-medium ${
+              activeTab === 'sides'
+                ? 'bg-emerald-800 text-emerald-100'
+                : 'bg-emerald-200/80 text-emerald-900'
+            }`}
+          >
+            {sideRecipes.length}
+          </span>
+        </button>
+      </div>
+
+      {/* Context Banner: 'all', 'sides', or specific active season */}
+      {activeTab === 'sides' ? (
+        <div className="mt-4 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-emerald-50/90 via-white to-emerald-50/50 border border-emerald-200/90 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-start sm:items-center gap-3">
+            <div className="text-3xl">🥗</div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="font-serif font-bold text-stone-900 text-base sm:text-lg">
+                  Espace Accompagnements
+                </h3>
+                <span className="text-xs text-emerald-900 font-medium bg-emerald-100 border border-emerald-200 px-2.5 py-0.5 rounded-full">
+                  {sideRecipes.length} accompagnement{sideRecipes.length > 1 ? 's' : ''}
+                </span>
+              </div>
+              <p className="text-[12px] text-stone-700 mt-0.5">
+                Recettes simples du quotidien (riz, pâtes, légumes, grillades...) à associer à vos repas dans le planning.
+              </p>
+            </div>
+          </div>
+
+          {onNewSide && (
+            <button
+              type="button"
+              onClick={onNewSide}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm shadow-emerald-600/20 transition-all cursor-pointer shrink-0 self-start md:self-auto"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Nouvel accompagnement</span>
+            </button>
+          )}
+        </div>
+      ) : activeTab === 'all' ? (
         <div className="mt-4 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-stone-50 via-white to-stone-50 border border-stone-200/80 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div className="flex items-start sm:items-center gap-3">
             <div className="text-3xl">🍲</div>
@@ -183,7 +243,7 @@ export const SeasonTabs: React.FC<SeasonTabsProps> = ({
                   Toutes les recettes
                 </h3>
                 <span className="text-xs text-stone-700 font-medium bg-stone-200/70 px-2 py-0.5 rounded-full">
-                  {recipes.length} recettes au carnet
+                  {mainRecipes.length} recettes au carnet
                 </span>
                 <span className="text-xs font-semibold text-amber-900 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full flex items-center gap-1">
                   <Sparkles className="w-3 h-3 text-amber-700" />
